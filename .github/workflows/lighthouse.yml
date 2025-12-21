@@ -23,7 +23,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 1. pnpm 설치 (추가됨)
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -33,13 +32,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: "pnpm" # 2. 캐시 설정을 pnpm으로 변경
+          cache: "pnpm"
 
-      # 3. pnpm으로 의존성 설치
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
-      # 4. pnpm으로 빌드
       - name: Build Project
         run: pnpm run build
 
@@ -50,7 +47,6 @@ jobs:
         id: lighthouse
         continue-on-error: true
         run: |
-          # pnpm 빌드 결과물(dist)을 측정
           lhci autorun --collect.staticDistDir=./dist --collect.numberOfRuns=3
 
       - name: Report Results to GitHub Issue
@@ -62,7 +58,6 @@ jobs:
             const fs = require('fs');
             const path = require('path');
 
-            // --- 아래 스크립트 내용은 기존과 동일합니다 ---
             const LHCI_DIR = '.lighthouseci';
             const THRESHOLDS = {
               LCP: { good: 2500, poor: 4000 },
@@ -85,11 +80,11 @@ jobs:
             const formatScore = (val) => Math.round((val || 0) * 100);
 
             const getStatusIcon = (val, metric) => {
-              if (!metric) return val >= 90 ? '🟢 Excellent' : val >= 50 ? '🟠 Average' : '🔴 Poor';
+              if (!metric) return val >= 90 ? '🟢' : val >= 50 ? '🟠' : '🔴';
               const t = THRESHOLDS[metric];
-              if (val <= t.good) return '🟢 Good';
-              if (val <= t.poor) return '🟠 Needs Improvement';
-              return '🔴 Poor';
+              if (val <= t.good) return '🟢';
+              if (val <= t.poor) return '🟠';
+              return '🔴';
             };
 
             const formatMetricValue = (val, metric) => {
@@ -98,27 +93,38 @@ jobs:
               return `${(val / 1000).toFixed(2)}s`;
             };
 
-            const generateMentoring = (webVitals, scores) => {
-              let advice = [];
+            // 학습 중심의 피드백 생성 함수
+            const generateFeedback = (webVitals, scores) => {
+              let feedback = [];
+              
+              // LCP 분석
               if (webVitals.LCP > THRESHOLDS.LCP.good) {
-                advice.push(`### 🐢 **LCP 개선이 시급합니다! (${formatMetricValue(webVitals.LCP, 'LCP')})**`);
-                advice.push(`- **API 호출 점검**: \`Promise.all\`을 사용하고 있지만, 내부에서 \`await\`로 인해 직렬(Waterfall) 처리가 되고 있는지 확인해보세요.`);
-                advice.push(`- **초기 로딩**: 불필요하게 중복 호출되는 API가 없는지 \`fetch\` 함수들을 점검하세요.`);
+                feedback.push(`### ⚠️ **LCP 최적화 필요 (${formatMetricValue(webVitals.LCP, 'LCP')})**`);
+                feedback.push(`- **분석**: 초기 로딩 속도가 기준치보다 느립니다. API 호출이 직렬(Waterfall)로 처리되고 있거나, 리소스 로딩 순서 최적화가 필요합니다.`);
+                feedback.push(`- **학습 포인트**: \`Promise.all\`을 통한 병렬 처리와 네트워크 요청 흐름을 점검해 보세요.`);
               }
+
+              // INP 분석
               if (webVitals.INP > THRESHOLDS.INP.good || scores.performance < 0.9) {
-                 advice.push(`### 🐌 **반응성이 떨어집니다 (INP/TBT 경고)**`);
-                 advice.push(`- **필터링 연산**: \`SearchDialog\`의 \`getFilteredLectures\` 함수가 매 렌더링마다 실행되나요? **\`useMemo\`** 도입을 강력 추천합니다.`);
-                 advice.push(`- **리렌더링**: 검색어 입력 시 테이블의 모든 Row가 다시 그려지나요? **\`React.memo\`**와 **\`useCallback\`**으로 하위 컴포넌트를 보호하세요.`);
+                 feedback.push(`### ⚠️ **반응성(INP) 개선 필요**`);
+                 feedback.push(`- **분석**: 사용자 입력에 대한 응답 지연이 발생하고 있습니다. 렌더링 과정에서 불필요한 연산이 반복될 가능성이 높습니다.`);
+                 feedback.push(`- **학습 포인트**: 컴포넌트 리렌더링 원리를 이해하고, \`useMemo\`나 \`React.memo\`를 적절히 적용했는지 확인해 보세요.`);
               }
+
+              // CLS 분석
               if (webVitals.CLS > THRESHOLDS.CLS.good) {
-                 advice.push(`### 🏗 **화면이 덜컥거립니다 (CLS 경고)**`);
-                 advice.push(`- **로딩 처리**: 데이터가 로딩되기 전과 후의 레이아웃 높이가 고정되어 있나요? 스켈레톤 UI나 \`min-height\`를 확인하세요.`);
+                 feedback.push(`### ⚠️ **레이아웃 안정성(CLS) 확보 필요**`);
+                 feedback.push(`- **분석**: 데이터 로딩 전후로 화면 요소의 위치가 변경되고 있습니다.`);
+                 feedback.push(`- **학습 포인트**: 스켈레톤 UI 적용이나 고정된 높이값(` + '`min-height`' + `) 설정을 통해 시각적 안정성을 높여보세요.`);
               }
-              if (advice.length === 0) {
-                advice.push(`### 🎉 **완벽합니다! 자바스크립트 1인자의 칭호를 얻으셨군요.**`);
-                advice.push(`더 이상 최적화할 곳이 없어 보입니다. 아주 훌륭한 코드입니다.`);
+
+              // 최적화 성공 시
+              if (feedback.length === 0) {
+                feedback.push(`### ✅ **성능 최적화 목표 달성**`);
+                feedback.push(`모든 핵심 지표(Core Web Vitals)가 안정적입니다. 성능 최적화 기법을 성공적으로 이해하고 적용하였습니다.`);
               }
-              return advice.join('\n');
+
+              return feedback.join('\n');
             };
 
             const report = getLatestReport();
@@ -135,8 +141,6 @@ jobs:
               performance: categories.performance?.score,
               accessibility: categories.accessibility?.score,
               bestPractices: categories['best-practices']?.score,
-              seo: categories.seo?.score,
-              pwa: categories.pwa?.score,
             };
 
             const webVitals = {
@@ -146,44 +150,43 @@ jobs:
             };
 
             const now = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
-            const mentoringMessage = generateMentoring(webVitals, scores);
+            const feedbackMessage = generateFeedback(webVitals, scores);
 
             const body = `
-            ## ⚡️ Lighthouse Performance Report
-            > 📅 측정 일시: **${now}**
+            ## 📊 성능 분석 리포트
+            > 측정 일시: ${now}
 
-            ### 💡 1인자의 성능 코칭 (Action Items)
-            ${mentoringMessage}
+            ${feedbackMessage}
 
             ---
 
-            ### 🏆 Overall Scores
-            | Category | Score | Status |
+            ### 측정 결과 요약
+            | 카테고리 | 점수 | 상태 |
             |:---:|:---:|:---|
             | **Performance** | **${formatScore(scores.performance)}** | ${getStatusIcon(formatScore(scores.performance))} |
             | **Accessibility** | **${formatScore(scores.accessibility)}** | ${getStatusIcon(formatScore(scores.accessibility))} |
             | **Best Practices** | **${formatScore(scores.bestPractices)}** | ${getStatusIcon(formatScore(scores.bestPractices))} |
 
-            ### 📊 Core Web Vitals
-            | Metric | Value | Status |
-            |:---:|:---:|:---|
-            | **LCP** | **${formatMetricValue(webVitals.LCP, 'LCP')}** | ${getStatusIcon(webVitals.LCP, 'LCP')} |
-            | **INP (TBT)** | **${formatMetricValue(webVitals.INP, 'INP')}** | ${getStatusIcon(webVitals.INP, 'INP')} |
-            | **CLS** | **${formatMetricValue(webVitals.CLS, 'CLS')}** | ${getStatusIcon(webVitals.CLS, 'CLS')} |
+            ### Core Web Vitals
+            | 지표 | 측정값 | 상태 | 설명 |
+            |:---:|:---:|:---|:---|
+            | **LCP** | ${formatMetricValue(webVitals.LCP, 'LCP')} | ${getStatusIcon(webVitals.LCP, 'LCP')} | 로딩 속도 |
+            | **INP** | ${formatMetricValue(webVitals.INP, 'INP')} | ${getStatusIcon(webVitals.INP, 'INP')} | 반응성 (TBT 포함) |
+            | **CLS** | ${formatMetricValue(webVitals.CLS, 'CLS')} | ${getStatusIcon(webVitals.CLS, 'CLS')} | 시각적 안정성 |
 
             <details>
-            <summary>📚 상세 기준값 보기</summary>
+            <summary>참고: 성능 지표 기준</summary>
 
-            - **LCP**: < 2.5s (Good) / < 4.0s (Needs Improvement)
-            - **INP**: < 200ms (Good) / < 500ms (Needs Improvement)
-            - **CLS**: < 0.1 (Good) / < 0.25 (Needs Improvement)
+            - **LCP (Largest Contentful Paint)**: 2.5초 이하 우수
+            - **INP (Interaction to Next Paint)**: 200ms 이하 우수
+            - **CLS (Cumulative Layout Shift)**: 0.1 이하 우수
             </details>
             `;
 
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `🚀 성능 리포트 & 멘토링 [${now}]`,
+              title: `성능 분석 결과 [${now}]`,
               body: body,
               labels: ['lighthouse', 'performance']
             });
