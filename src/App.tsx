@@ -8,7 +8,7 @@ function App() {
     <ChakraProvider>
       <ScheduleProvider>
         <ScheduleDndProvider>
-          <div>배포</div>
+          <div>배포2</div>
           <ScheduleTables />
         </ScheduleDndProvider>
       </ScheduleProvider>
