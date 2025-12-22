@@ -82,8 +82,9 @@ const TIME_SLOTS = [
 
 const PAGE_SIZE = 100;
 
-const fetchMajors = () => axios.get<Lecture[]>('/schedules-majors.json');
-const fetchLiberalArts = () => axios.get<Lecture[]>('/schedules-liberal-arts.json');
+// ✅ Vite base URL 적용 (GitHub Pages 대응)
+const fetchMajors = () => axios.get<Lecture[]>(`${import.meta.env.BASE_URL}schedules-majors.json`);
+const fetchLiberalArts = () => axios.get<Lecture[]>(`${import.meta.env.BASE_URL}schedules-liberal-arts.json`);
 
 // ✅ 최적화 완료: Promise.all 병렬 호출 + 중복 API 호출 제거
 const fetchAllLectures = async () => {
