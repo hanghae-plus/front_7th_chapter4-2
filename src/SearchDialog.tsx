@@ -493,6 +493,8 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
   }, [searchInfo]);
 
   useEffect(() => {
+    //닫힐때는 렌더링이 불필요 하므로 여기서 멈춰도 됨
+    if (!searchInfo) return
     setSearchOptions((prev) => ({
       ...prev,
       days: searchInfo?.day ? [searchInfo.day] : [],
@@ -510,7 +512,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
       },
       {
         root: scrollRef.current,
-        // [중요] 미리 불러오기 (바닥 500px 전)
+        // 미리 불러오기 (바닥 500px 전)
         rootMargin: "0px 0px 500px 0px",
         threshold: 0,
       }
@@ -524,11 +526,9 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
   }, [visibleLectures.length, filteredLectures.length]); // 의존성 배열 수정: visible 길이가 바뀔 때마다 재측정
 
   return (
-    // [수정 1] isCentered: 모달을 화면 중앙에 띄움
+    // isCentered: 모달을 화면 중앙에 띄움
     <Modal isOpen={Boolean(searchInfo)} onClose={onClose} size="6xl" isCentered>
       <ModalOverlay />
-      {/* [핵심 수정 1] maxH 대신 h="80vh"를 사용하여 높이를 강제로 고정합니다. 
-          이제 검색 결과가 0개여도 모달 크기는 줄어들지 않습니다. */}
       <ModalContent
         maxW="90vw"
         w="1000px"
