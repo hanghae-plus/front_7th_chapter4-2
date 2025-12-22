@@ -45,7 +45,11 @@ const ScheduleTableWrapper = memo(
             <Button colorScheme="green" onClick={() => onSearch(tableId)}>
               시간표 추가
             </Button>
-            <Button colorScheme="green" mx="1px" onClick={() => onDuplicate(tableId)}>
+            <Button
+              colorScheme="green"
+              mx="1px"
+              onClick={() => onDuplicate(tableId)}
+            >
               복제
             </Button>
             <Button
@@ -83,19 +87,25 @@ export const ScheduleTables = () => {
     setSearchInfo({ tableId });
   }, []);
 
-  const handleDuplicate = useCallback((targetId: string) => {
-    setSchedulesMap((prev) => ({
-      ...prev,
-      [`schedule-${Date.now()}`]: [...prev[targetId]],
-    }));
-  }, [setSchedulesMap]);
+  const handleDuplicate = useCallback(
+    (targetId: string) => {
+      setSchedulesMap((prev) => ({
+        ...prev,
+        [`schedule-${Date.now()}`]: [...prev[targetId]],
+      }));
+    },
+    [setSchedulesMap]
+  );
 
-  const handleRemove = useCallback((targetId: string) => {
-    setSchedulesMap((prev) => {
-      delete prev[targetId];
-      return { ...prev };
-    });
-  }, [setSchedulesMap]);
+  const handleRemove = useCallback(
+    (targetId: string) => {
+      setSchedulesMap((prev) => {
+        delete prev[targetId];
+        return { ...prev };
+      });
+    },
+    [setSchedulesMap]
+  );
 
   const handleScheduleTimeClick = useCallback(
     (tableId: string, timeInfo: { day: string; time: number }) => {

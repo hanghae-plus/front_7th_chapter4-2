@@ -397,7 +397,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
   const deferredSearchOptions = useDeferredValue(searchOptions);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-  const loaderRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
   const PAGE_SIZE = 20;
 
@@ -443,10 +443,10 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     [lectures]
   );
 
- const visibleLectures = useMemo(
-  () => filteredLectures.slice(0, page * PAGE_SIZE),
-  [filteredLectures, page]
-);
+  const visibleLectures = useMemo(
+    () => filteredLectures.slice(0, page * PAGE_SIZE),
+    [filteredLectures, page]
+  );
 
   const changeSearchOption = useCallback(
     (field: keyof SearchOption, value: SearchOption[typeof field]) => {
@@ -474,6 +474,32 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
       onClose();
     },
     [setSchedulesMap, onClose]
+  );
+
+  // [수정] 무한 스크롤을 위한 Callback Ref 구현
+  // 로더 요소가 DOM에 나타나는 즉시 옵저버를 연결합니다.
+  const loaderRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (observerRef.current) observerRef.current.disconnect();
+
+      if (node && scrollRef.current) {
+        observerRef.current = new IntersectionObserver(
+          (entries) => {
+            if (entries[0].isIntersecting) {
+              setPage((prevPage) => prevPage + 1);
+            }
+          },
+          {
+            root: scrollRef.current,
+            rootMargin: "0px 0px 500px 0px",
+            threshold: 0,
+          }
+        );
+        observerRef.current.observe(node);
+      }
+    },
+    // 데이터나 페이지가 변경되어 로더가 다시 렌더링될 때마다 옵저버를 갱신합니다.
+    [visibleLectures, filteredLectures]
   );
 
   useEffect(() => {
@@ -508,27 +534,6 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     }));
     setPage(1);
   }, [searchInfo]);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setPage((prevPage) => prevPage + 1);
-        }
-      },
-      {
-        root: scrollRef.current,
-        rootMargin: "0px 0px 500px 0px",
-        threshold: 0,
-      }
-    );
-
-    if (loaderRef.current) {
-      observer.observe(loaderRef.current);
-    }
-
-    return () => observer.disconnect();
-  }, [visibleLectures.length, filteredLectures.length]);
 
   return (
     <Modal isOpen={Boolean(searchInfo)} onClose={onClose} size="6xl" isCentered>
