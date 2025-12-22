@@ -1,7 +1,7 @@
 import { Button, ButtonGroup, Flex, Heading, Stack } from "@chakra-ui/react";
 import ScheduleTable from "./ScheduleTable.tsx";
 import { useScheduleContext } from "./ScheduleContext.tsx";
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useState, useCallback } from "react";
 
 // ✅ 최적화: SearchDialog 지연 로딩 (초기 번들 크기 감소)
 const SearchDialog = lazy(() => import("./SearchDialog.tsx"));
@@ -16,19 +16,34 @@ export const ScheduleTables = () => {
 
   const disabledRemoveButton = Object.keys(schedulesMap).length === 1;
 
-  const duplicate = (targetId: string) => {
+  // ✅ 최적화: useCallback으로 콜백 메모이제이션
+  const duplicate = useCallback((targetId: string) => {
     setSchedulesMap(prev => ({
       ...prev,
       [`schedule-${Date.now()}`]: [...prev[targetId]]
     }))
-  };
+  }, [setSchedulesMap]);
 
-  const remove = (targetId: string) => {
+  // ✅ 최적화: useCallback으로 콜백 메모이제이션
+  const remove = useCallback((targetId: string) => {
     setSchedulesMap(prev => {
       delete prev[targetId];
       return { ...prev };
     })
-  };
+  }, [setSchedulesMap]);
+
+  // ✅ 최적화: useCallback으로 시간 클릭 콜백 메모이제이션
+  const handleScheduleTimeClick = useCallback((tableId: string, timeInfo: { day: string, time: number }) => {
+    setSearchInfo({ tableId, ...timeInfo });
+  }, []);
+
+  // ✅ 최적화: useCallback으로 삭제 콜백 메모이제이션
+  const handleDeleteButtonClick = useCallback((tableId: string, day: string, time: number) => {
+    setSchedulesMap(prev => ({
+      ...prev,
+      [tableId]: prev[tableId].filter(schedule => schedule.day !== day || !schedule.range.includes(time))
+    }));
+  }, [setSchedulesMap]);
 
   return (
     <>
@@ -48,11 +63,8 @@ export const ScheduleTables = () => {
               key={`schedule-table-${index}`}
               schedules={schedules}
               tableId={tableId}
-              onScheduleTimeClick={(timeInfo) => setSearchInfo({ tableId, ...timeInfo })}
-              onDeleteButtonClick={({ day, time }) => setSchedulesMap((prev) => ({
-                ...prev,
-                [tableId]: prev[tableId].filter(schedule => schedule.day !== day || !schedule.range.includes(time))
-              }))}
+              onScheduleTimeClick={(timeInfo) => handleScheduleTimeClick(tableId, timeInfo)}
+              onDeleteButtonClick={({ day, time }) => handleDeleteButtonClick(tableId, day, time)}
             />
           </Stack>
         ))}

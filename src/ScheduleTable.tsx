@@ -17,7 +17,7 @@ import { Schedule } from "./types.ts";
 import { fill2, parseHnM } from "./utils.ts";
 import { useDndContext, useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { ComponentProps, Fragment, memo } from "react";
+import { ComponentProps, Fragment, memo, useMemo } from "react";
 
 interface Props {
   tableId: string;
@@ -38,13 +38,17 @@ const TIMES = [
     .map((v) => `${parseHnM(v)}~${parseHnM(v + 50 * 분)}`),
 ] as const;
 
-const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
+// ✅ 최적화: ScheduleTable에 memo 적용
+const ScheduleTable = memo(({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
 
-  const getColor = (lectureId: string): string => {
-    const lectures = [...new Set(schedules.map(({ lecture }) => lecture.id))];
+  // ✅ 최적화: useMemo로 colorMap 생성 (schedules 변경 시에만 재계산)
+  const colorMap = useMemo(() => {
+    const lectureIds = [...new Set(schedules.map(({ lecture }) => lecture.id))];
     const colors = ["#fdd", "#ffd", "#dff", "#ddf", "#fdf", "#dfd"];
-    return colors[lectures.indexOf(lectureId) % colors.length];
-  };
+    return Object.fromEntries(
+      lectureIds.map((id, index) => [id, colors[index % colors.length]])
+    );
+  }, [schedules]);
 
   const dndContext = useDndContext();
 
@@ -116,7 +120,7 @@ const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButton
           key={`${schedule.lecture.title}-${index}`}
           id={`${tableId}:${index}`}
           data={schedule}
-          bg={getColor(schedule.lecture.id)}
+          bg={colorMap[schedule.lecture.id]}
           onDeleteButtonClick={() => onDeleteButtonClick?.({
             day: schedule.day,
             time: schedule.range[0],
@@ -125,7 +129,7 @@ const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButton
       ))}
     </Box>
   );
-};
+});
 
 // ✅ 최적화: React.memo로 DraggableSchedule 메모이제이션
 const DraggableSchedule = memo(({
