@@ -51,8 +51,9 @@ export default function ScheduleDndProvider({ children }: PropsWithChildren) {
     setSchedulesMap({
       ...schedulesMap,
       [tableId]: schedulesMap[tableId].map((targetSchedule, targetIndex) => {
+        // 변경되지 않은 강의는 기존 객체를 그대로 반환 -> 참조 유지 -> 리렌더링 방지
         if (targetIndex !== Number(index)) {
-          return { ...targetSchedule }
+          return targetSchedule
         }
         return {
           ...targetSchedule,
