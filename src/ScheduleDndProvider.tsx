@@ -29,7 +29,7 @@ function createSnapModifier(): Modifier {
 const modifiers = [createSnapModifier()]
 
 export default function ScheduleDndProvider({ children }: PropsWithChildren) {
-  const { schedulesMap, setSchedulesMap } = useScheduleContext();
+  const { setSchedulesMap } = useScheduleContext();
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
