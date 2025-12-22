@@ -86,6 +86,7 @@ const PAGE_SIZE = 100;
 const fetchMajors = () => axios.get<Lecture[]>(`${import.meta.env.BASE_URL}schedules-majors.json`);
 const fetchLiberalArts = () => axios.get<Lecture[]>(`${import.meta.env.BASE_URL}schedules-liberal-arts.json`);
 
+// TODO: 이 코드를 개선해서 API 호출을 최소화 해보세요 + Promise.all이 현재 잘못 사용되고 있습니다. 같이 개선해주세요.
 // ✅ 최적화 완료: Promise.all 병렬 호출 + 중복 API 호출 제거
 const fetchAllLectures = async () => {
   console.log('API Call 시작 (병렬)', performance.now());
@@ -97,6 +98,7 @@ const fetchAllLectures = async () => {
   return results;
 };
 
+// TODO: 이 컴포넌트에서 불필요한 연산이 발생하지 않도록 다양한 방식으로 시도해주세요.
 // ✅ 최적화 완료: useMemo로 불필요한 연산 방지 (filteredLectures, allMajors)
 const SearchDialog = ({ searchInfo, onClose }: Props) => {
   const { setSchedulesMap } = useScheduleContext();
