@@ -1,8 +1,10 @@
 import { Button, ButtonGroup, Flex, Heading, Stack } from "@chakra-ui/react";
 import ScheduleTable from "./ScheduleTable.tsx";
 import { useScheduleContext } from "./ScheduleContext.tsx";
-import SearchDialog from "./SearchDialog.tsx";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
+
+// ✅ 최적화: SearchDialog 지연 로딩 (초기 번들 크기 감소)
+const SearchDialog = lazy(() => import("./SearchDialog.tsx"));
 
 export const ScheduleTables = () => {
   const { schedulesMap, setSchedulesMap } = useScheduleContext();
@@ -55,7 +57,10 @@ export const ScheduleTables = () => {
           </Stack>
         ))}
       </Flex>
-      <SearchDialog searchInfo={searchInfo} onClose={() => setSearchInfo(null)}/>
+      {/* ✅ Suspense로 지연 로딩된 컴포넌트 감싸기 */}
+      <Suspense fallback={null}>
+        <SearchDialog searchInfo={searchInfo} onClose={() => setSearchInfo(null)}/>
+      </Suspense>
     </>
   );
 }
