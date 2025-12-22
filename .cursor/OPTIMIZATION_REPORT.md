@@ -11,8 +11,8 @@
 |------|------|------|----------|
 | 🌐 네트워크 | Promise.all 병렬 호출 | ✅ 완료 | 순차→병렬 실행 |
 | 🌐 네트워크 | 중복 API 호출 제거 | ✅ 완료 | 6회→2회 |
-| ⚡ JS 성능 | useMemo (filteredLectures) | ⬜ 미완료 | - |
-| ⚡ JS 성능 | useMemo (allMajors) | ⬜ 미완료 | - |
+| ⚡ JS 성능 | useMemo (filteredLectures) | ✅ 완료 | 의존성 변경 시에만 재계산 |
+| ⚡ JS 성능 | useMemo (allMajors) | ✅ 완료 | lectures 변경 시에만 재계산 |
 | 🎨 렌더링 | React.memo (DraggableSchedule) | ⬜ 미완료 | - |
 | 🎨 렌더링 | useCallback (handleDragEnd) | ⬜ 미완료 | - |
 | 🎨 렌더링 | 원본 참조 유지 (드롭 시) | ⬜ 미완료 | - |
@@ -68,21 +68,38 @@ const fetchAllLectures = async () => {
 
 **파일**: `src/SearchDialog.tsx`
 
-**상태**: ⬜ 미완료
+**상태**: ✅ 완료
 
 #### Before
 ```typescript
-// 코드 작성 예정
+// ❌ 매 렌더마다 필터링 연산 실행
+const getFilteredLectures = () => {
+  const { query = '', credits, grades, days, times, majors } = searchOptions;
+  return lectures
+    .filter(lecture => ...)
+    .filter(lecture => ...)
+    // ... 여러 filter 체이닝
+};
+
+const filteredLectures = getFilteredLectures(); // 매번 호출
 ```
 
 #### After
 ```typescript
-// 코드 작성 예정
+// ✅ useMemo로 의존성이 변경될 때만 재계산
+const filteredLectures = useMemo(() => {
+  const { query = '', credits, grades, days, times, majors } = searchOptions;
+  return lectures
+    .filter(lecture => ...)
+    .filter(lecture => ...)
+    // ... 여러 filter 체이닝
+}, [lectures, searchOptions]);
 ```
 
 #### 개선 효과
 - 불필요한 필터링 연산 방지
 - 의존성: `[lectures, searchOptions]`
+- `page` 변경 시 재계산 안 함 (이전에는 매번 실행)
 
 ---
 
@@ -90,21 +107,27 @@ const fetchAllLectures = async () => {
 
 **파일**: `src/SearchDialog.tsx`
 
-**상태**: ⬜ 미완료
+**상태**: ✅ 완료
 
 #### Before
 ```typescript
-// 코드 작성 예정
+// ❌ 매 렌더마다 Set 연산 실행
+const allMajors = [...new Set(lectures.map(lecture => lecture.major))];
 ```
 
 #### After
 ```typescript
-// 코드 작성 예정
+// ✅ useMemo로 lectures가 변경될 때만 재계산
+const allMajors = useMemo(() => 
+  [...new Set(lectures.map(lecture => lecture.major))],
+  [lectures]
+);
 ```
 
 #### 개선 효과
 - 불필요한 Set 연산 방지
 - 의존성: `[lectures]`
+- searchOptions, page 변경 시 재계산 안 함
 
 ---
 
@@ -202,5 +225,6 @@ const fetchAllLectures = async () => {
 |------|----------|------|
 | 2024-12-22 | 최적화 명세서 생성 | AI |
 | 2024-12-22 | 🌐 API 호출 최적화 완료 (Promise.all 병렬 + 중복 제거) | AI |
+| 2024-12-22 | ⚡ useMemo 최적화 완료 (filteredLectures, allMajors) | AI |
 
 
