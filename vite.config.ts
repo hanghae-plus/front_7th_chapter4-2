@@ -12,6 +12,10 @@ export default defineConfig(() => {
   return {
     base,
     plugins: [react()],
+    // ✅ 소스 맵 활성화 (Lighthouse 권장, 디버깅 용이)
+    build: {
+      sourcemap: true,
+    },
     test: {
       globals: true,
       environment: 'jsdom',
