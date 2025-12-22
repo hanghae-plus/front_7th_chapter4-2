@@ -1,0 +1,90 @@
+---
+description: React 성능 최적화 과제를 위한 Cursor 규칙
+globs: ["src/**/*.tsx", "src/**/*.ts"]
+alwaysApply: true
+---
+
+# React 성능 최적화 과제 규칙
+
+## 프로젝트 컨텍스트
+
+이 프로젝트는 React 성능 최적화 심화 과제입니다. 대학 시간표 관리 앱에서 발생하는 성능 문제를 최적화해야 합니다.
+
+## 핵심 최적화 대상
+
+### 1. Promise.all 최적화 (SearchDialog.tsx)
+- `await Promise.all([await fn1(), await fn2()])`는 순차 실행됨 (잘못된 사용)
+- `await Promise.all([fn1(), fn2()])`가 병렬 실행 (올바른 사용)
+- 중복 API 호출을 제거해야 함
+
+### 2. 연산 최적화 (useMemo)
+- 비용이 큰 필터링/계산은 `useMemo`로 메모이제이션
+- 의존성 배열을 정확히 지정
+
+### 3. 리렌더링 최적화
+- `React.memo`로 컴포넌트 메모이제이션
+- `useCallback`으로 콜백 함수 메모이제이션
+- 불변성 유지하되 불필요한 객체 재생성 방지
+
+### 4. 드래그/드롭 최적화
+- 드래그 중 관련 없는 컴포넌트 리렌더링 방지
+- 변경되지 않은 데이터는 원본 참조 유지
+
+## 코딩 규칙
+
+### 선호하는 패턴
+```typescript
+// useMemo 사용
+const memoizedValue = useMemo(() => expensiveOperation(data), [data]);
+
+// useCallback 사용
+const handleClick = useCallback(() => { /* ... */ }, [dependency]);
+
+// React.memo 사용
+const MemoizedComponent = React.memo(({ prop }) => { /* ... */ });
+
+// 올바른 Promise.all
+const results = await Promise.all([fetchA(), fetchB()]);
+```
+
+### 피해야 할 패턴
+```typescript
+// ❌ 매 렌더마다 계산
+const value = expensiveOperation(data);
+
+// ❌ Promise.all 내 await
+await Promise.all([await fetchA(), await fetchB()]);
+
+// ❌ 불필요한 객체 재생성
+items.map(item => ({ ...item })) // 변경 없이 복사만 하는 경우
+```
+
+## 파일별 주의사항
+
+### SearchDialog.tsx
+- `fetchAllLectures` 함수의 Promise.all 수정
+- `getFilteredLectures` → useMemo로 변환
+- `allMajors` 계산 → useMemo로 변환
+- 검색 결과 테이블 컴포넌트 분리 및 메모이제이션 고려
+
+### ScheduleDndProvider.tsx
+- `handleDragEnd`에서 변경되지 않은 스케줄은 원본 유지
+- 콜백 함수 메모이제이션
+
+### ScheduleTable.tsx
+- `DraggableSchedule` 컴포넌트 메모이제이션
+- `getColor` 함수 최적화
+
+## 테스트 방법
+
+1. 브라우저 콘솔에서 API 호출 시간 확인
+2. React DevTools Profiler로 리렌더링 확인
+3. Performance 탭에서 드래그 시 프레임 드롭 확인
+
+## 기술 스택
+
+- React (latest)
+- TypeScript
+- Chakra UI
+- @dnd-kit (드래그 앤 드롭)
+- Vite + Vitest
