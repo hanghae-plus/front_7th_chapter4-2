@@ -95,9 +95,9 @@ const TIME_SLOTS = [
   { id: 24, label: "22:35~23:25" },
 ];
 
-const fetchMajors = () => axios.get<Lecture[]>("/schedules-majors.json");
+const fetchMajors = () => axios.get<Lecture[]>("schedules-majors.json");
 const fetchLiberalArts = () =>
-  axios.get<Lecture[]>("/schedules-liberal-arts.json");
+  axios.get<Lecture[]>("schedules-liberal-arts.json");
 
 const fetchAllLectures = async () => {
   const start = performance.now();
@@ -532,7 +532,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
       <ModalContent
         maxW="90vw"
         w="1000px"
-        h="80vh"
+        h="90vh"
         display="flex"
         flexDirection="column"
       >
