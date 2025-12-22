@@ -13,9 +13,9 @@
 | 🌐 네트워크 | 중복 API 호출 제거 | ✅ 완료 | 6회→2회 |
 | ⚡ JS 성능 | useMemo (filteredLectures) | ✅ 완료 | 의존성 변경 시에만 재계산 |
 | ⚡ JS 성능 | useMemo (allMajors) | ✅ 완료 | lectures 변경 시에만 재계산 |
-| 🎨 렌더링 | React.memo (DraggableSchedule) | ⬜ 미완료 | - |
-| 🎨 렌더링 | useCallback (handleDragEnd) | ⬜ 미완료 | - |
-| 🎨 렌더링 | 원본 참조 유지 (드롭 시) | ⬜ 미완료 | - |
+| 🎨 렌더링 | React.memo (DraggableSchedule) | ✅ 완료 | props 변경 시에만 리렌더링 |
+| 🎨 렌더링 | useCallback (handleDragEnd) | ✅ 완료 | 함수 참조 안정화 |
+| 🎨 렌더링 | 원본 참조 유지 (드롭 시) | ✅ 완료 | 변경 안 된 스케줄 원본 유지 |
 
 ---
 
@@ -137,21 +137,27 @@ const allMajors = useMemo(() =>
 
 **파일**: `src/ScheduleTable.tsx`
 
-**상태**: ⬜ 미완료
+**상태**: ✅ 완료
 
 #### Before
 ```typescript
-// 코드 작성 예정
+// ❌ 부모가 리렌더링되면 항상 리렌더링
+const DraggableSchedule = ({ id, data, bg, onDeleteButtonClick }) => {
+  // ...
+}
 ```
 
 #### After
 ```typescript
-// 코드 작성 예정
+// ✅ React.memo로 props가 변경될 때만 리렌더링
+const DraggableSchedule = memo(({ id, data, bg, onDeleteButtonClick }) => {
+  // ...
+})
 ```
 
 #### 개선 효과
-- 드래그 중 불필요한 리렌더링 방지
-- React DevTools Profiler 결과: `???`
+- 드래그 중 다른 스케줄 블록 리렌더링 방지
+- props가 변경된 컴포넌트만 리렌더링
 
 ---
 
@@ -159,21 +165,34 @@ const allMajors = useMemo(() =>
 
 **파일**: `src/ScheduleDndProvider.tsx`
 
-**상태**: ⬜ 미완료
+**상태**: ✅ 완료
 
 #### Before
 ```typescript
-// 코드 작성 예정
+// ❌ 매 렌더마다 새 함수 생성
+const handleDragEnd = (event: any) => {
+  // schedulesMap을 직접 참조
+  setSchedulesMap({
+    ...schedulesMap,
+    // ...
+  })
+};
 ```
 
 #### After
 ```typescript
-// 코드 작성 예정
+// ✅ useCallback + 함수형 업데이트로 의존성 최소화
+const handleDragEnd = useCallback((event: any) => {
+  setSchedulesMap(prev => {
+    // prev를 사용하여 schedulesMap 의존성 제거
+    // ...
+  });
+}, [setSchedulesMap]); // 안정적인 의존성만 사용
 ```
 
 #### 개선 효과
 - 함수 참조 안정화
-- 의존성: `[???]`
+- 의존성: `[setSchedulesMap]` (Context의 setter는 안정적)
 
 ---
 
@@ -181,21 +200,39 @@ const allMajors = useMemo(() =>
 
 **파일**: `src/ScheduleDndProvider.tsx`
 
-**상태**: ⬜ 미완료
+**상태**: ✅ 완료
 
 #### Before
 ```typescript
-// 코드 작성 예정
+// ❌ 변경 안 된 스케줄도 새 객체로 복사
+schedulesMap[tableId].map((targetSchedule, targetIndex) => {
+  if (targetIndex !== Number(index)) {
+    return { ...targetSchedule } // 불필요한 복사!
+  }
+  // ...
+})
 ```
 
 #### After
 ```typescript
-// 코드 작성 예정
+// ✅ 변경 안 된 스케줄은 원본 참조 유지
+prev[tableId].map((targetSchedule, targetIndex) => {
+  if (targetIndex !== Number(index)) {
+    return targetSchedule; // 원본 반환!
+  }
+  // ...
+})
+
+// ✅ 이동 없으면 원본 state 반환
+if (moveDayIndex === 0 && moveTimeIndex === 0) {
+  return prev;
+}
 ```
 
 #### 개선 효과
 - 변경되지 않은 스케줄 객체 재사용
-- 불필요한 리렌더링 방지
+- React.memo와 함께 사용 시 불필요한 리렌더링 방지
+- 이동 없으면 state 변경 안 함
 
 ---
 
@@ -226,5 +263,6 @@ const allMajors = useMemo(() =>
 | 2024-12-22 | 최적화 명세서 생성 | AI |
 | 2024-12-22 | 🌐 API 호출 최적화 완료 (Promise.all 병렬 + 중복 제거) | AI |
 | 2024-12-22 | ⚡ useMemo 최적화 완료 (filteredLectures, allMajors) | AI |
+| 2024-12-22 | 🎨 렌더링 최적화 완료 (React.memo, useCallback, 원본 참조 유지) | AI |
 
 
