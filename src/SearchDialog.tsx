@@ -82,9 +82,9 @@ const TIME_SLOTS = [
 
 const PAGE_SIZE = 100;
 
-const fetchMajors = () => axios.get<Lecture[]>('/schedules-majors.json');
+const fetchMajors = () => axios.get<Lecture[]>('./schedules-majors.json');
 const fetchLiberalArts = () =>
-  axios.get<Lecture[]>('/schedules-liberal-arts.json');
+  axios.get<Lecture[]>('./schedules-liberal-arts.json');
 
 function createCachedFetcher<T>(fetcher: () => Promise<T>) {
   let cache: Promise<T> | null = null;
