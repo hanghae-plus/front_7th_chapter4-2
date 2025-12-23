@@ -74,7 +74,7 @@ const TIME_SLOTS = [
 ];
 
 const SearchDialog = ({ searchInfo, onClose }: Props) => {
-  const { setSchedulesMap } = useScheduleContext();
+  const { schedulesMap, setSchedules } = useScheduleContext();
 
   const loaderWrapperRef = useRef<HTMLDivElement>(null);
   const loaderRef = useRef<HTMLDivElement>(null);
@@ -114,19 +114,18 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
 
       const { tableId } = searchInfo;
 
-      const schedules = parseSchedule(lecture.schedule).map((schedule) => ({
+      const newSchedules = parseSchedule(lecture.schedule).map((schedule) => ({
         ...schedule,
         lecture,
       }));
 
-      setSchedulesMap((prev) => ({
-        ...prev,
-        [tableId]: [...prev[tableId], ...schedules],
-      }));
+      // 해당 시간표만 독립적으로 업데이트
+      const currentSchedules = schedulesMap[tableId] || [];
+      setSchedules(tableId, [...currentSchedules, ...newSchedules]);
 
       onClose();
     },
-    [searchInfo, setSchedulesMap, onClose]
+    [searchInfo, schedulesMap, setSchedules, onClose]
   );
 
   useEffect(() => {
