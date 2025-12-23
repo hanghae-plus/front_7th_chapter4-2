@@ -41,15 +41,12 @@ const TIMES = [
 const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
 
   const dndContext = useDndContext();
-  const { active } = dndContext;
-  const isDragging = !!active;
 
   const getColor = useCallback((lectureId: string): string => {
-    if (isDragging) return '#ccc'; // 드래그 중 간단한 색상
     const lectures = [...new Set(schedules.map(({ lecture }) => lecture.id))];
     const colors = ["#fdd", "#ffd", "#dff", "#ddf", "#fdf", "#dfd"];
     return colors[lectures.indexOf(lectureId) % colors.length];
-  }, [schedules, isDragging]);
+  }, [schedules]);
 
   const getActiveTableId = () => {
     const activeId = dndContext.active?.id;
@@ -158,7 +155,7 @@ const DraggableSchedule = ({
           boxSizing="border-box"
           cursor="pointer"
           ref={setNodeRef}
-          transform={CSS.Translate.toString(transform)}
+          transform={transform ? CSS.Translate.toString(transform) : undefined}
           {...listeners}
           {...attributes}
         >

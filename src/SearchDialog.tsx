@@ -31,10 +31,9 @@ import {
 } from "@chakra-ui/react";
 import { useScheduleContext } from "./ScheduleContext.tsx";
 import { Lecture } from "./types.ts";
-import { parseSchedule } from "./utils.ts";
+import { parseSchedule, filterLectures } from "./utils.ts";
 import { DAY_LABELS } from "./constants.ts";
 import { useLectures } from "./hooks/useLectures.ts";
-import { useFilteredLectures } from "./hooks/useFilteredLectures.ts";
 
 interface Props {
   searchInfo: {
@@ -99,16 +98,16 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     majors: [],
   });
 
-  const filteredLectures = useFilteredLectures(lectures, searchOptions);
+  const filteredLectures = useMemo(() => filterLectures(lectures, searchOptions), [lectures, searchOptions]);
   const lastPage = Math.ceil(filteredLectures.length / PAGE_SIZE);
   const visibleLectures = filteredLectures.slice(0, page * PAGE_SIZE);
   const allMajors = useMemo(() => [...new Set(lectures.map(lecture => lecture.major))], [lectures]);
 
   const changeSearchOption = useCallback((field: keyof SearchOption, value: SearchOption[typeof field]) => {
     setPage(1);
-    setSearchOptions(({ ...searchOptions, [field]: value }));
+    setSearchOptions(prev => ({ ...prev, [field]: value }));
     loaderWrapperRef.current?.scrollTo(0, 0);
-  }, [searchOptions]);
+  }, []);
 
   const addSchedule = (lecture: Lecture) => {
     if (!searchInfo) return;
