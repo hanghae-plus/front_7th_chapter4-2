@@ -22,8 +22,8 @@ import { ComponentProps, Fragment, memo, PropsWithChildren } from "react";
 interface Props {
   tableId: string;
   schedules: Schedule[];
-  onScheduleTimeClick?: (timeInfo: { day: string; time: number }) => void;
-  onDeleteButtonClick?: (timeInfo: { day: string; time: number }) => void;
+  onScheduleTimeClick?: (timeInfo: { tableId: string; day: string; time: number }) => void;
+  onDeleteButtonClick?: (timeInfo: { tableId: string; day: string; time: number }) => void;
 }
 
 const TIMES = [
@@ -90,7 +90,7 @@ const ScheduleTable = memo(
                   bg={timeIndex > 17 ? "gray.100" : "white"}
                   cursor='pointer'
                   _hover={{ bg: "yellow.100" }}
-                  onClick={() => onScheduleTimeClick?.({ day, time: timeIndex + 1 })}
+                  onClick={() => onScheduleTimeClick?.({ tableId, day, time: timeIndex + 1 })}
                 />
               ))}
             </Fragment>
@@ -105,6 +105,7 @@ const ScheduleTable = memo(
             bg={getColor(schedule.lecture.id)}
             onDeleteButtonClick={() =>
               onDeleteButtonClick?.({
+                tableId,
                 day: schedule.day,
                 time: schedule.range[0],
               })
