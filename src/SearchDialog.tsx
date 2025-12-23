@@ -115,10 +115,10 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
 
     const { tableId } = searchInfo;
 
-    const schedules = parseSchedule(lecture.schedule).map(schedule => ({
+    const schedules = lecture.schedule ? parseSchedule(lecture.schedule).map(schedule => ({
       ...schedule,
       lecture
-    }));
+    })) : [];
 
     setSchedulesMap(prev => ({
       ...prev,
@@ -308,7 +308,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
                         <Td width="200px">{lecture.title}</Td>
                         <Td width="50px">{lecture.credits}</Td>
                         <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.major }}/>
-                        <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.schedule }}/>
+                        <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.schedule || '' }}/>
                         <Td width="80px">
                           <Button size="sm" colorScheme="green" onClick={() => addSchedule(lecture)}>추가</Button>
                         </Td>

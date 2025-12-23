@@ -1,10 +1,6 @@
-import axios from "axios";
 import { Lecture } from "../types.ts";
-
-const API_BASE_URL = import.meta.env.DEV ? '' : '/front_7th_chapter4-2';
-
-const fetchMajors = () => axios.get<Lecture[]>(`${API_BASE_URL}/schedules-majors.json`);
-const fetchLiberalArts = () => axios.get<Lecture[]>(`${API_BASE_URL}/schedules-liberal-arts.json`);
+import majorsData from '../../public/schedules-majors.json';
+import liberalArtsData from '../../public/schedules-liberal-arts.json';
 
 let cachedLectures: Lecture[] | null = null;
 
@@ -13,11 +9,7 @@ export const fetchAllLectures = async (): Promise<Lecture[]> => {
     return cachedLectures;
   }
 
-  const [majorsResponse, liberalArtsResponse] = await Promise.all([
-    fetchMajors(),
-    fetchLiberalArts(),
-  ]);
-
-  cachedLectures = [...majorsResponse.data, ...liberalArtsResponse.data];
+  // JSON 파일을 직접 import로 가져옴
+  cachedLectures = [...majorsData, ...liberalArtsData];
   return cachedLectures;
 };
