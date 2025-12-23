@@ -112,6 +112,8 @@ const LectureRow = memo(({ lecture, onAdd }: { lecture: Lecture; onAdd: (lecture
   );
 });
 
+LectureRow.displayName = 'LectureRow';
+
 const fetchMajors = (() => {
   let cache: Promise<AxiosResponse<Lecture[]>> | null = null;
   return () => {
