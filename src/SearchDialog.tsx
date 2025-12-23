@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -93,6 +93,10 @@ const fetchAllLectures = async () =>
   await Promise.all([
     (console.log("API Call 1", performance.now()), cachedFetchMajors()),
     (console.log("API Call 2", performance.now()), cachedFetchLiberalArts()),
+    (console.log("API Call 3", performance.now()), cachedFetchMajors()),
+    (console.log("API Call 4", performance.now()), cachedFetchLiberalArts()),
+    (console.log("API Call 5", performance.now()), cachedFetchMajors()),
+    (console.log("API Call 6", performance.now()), cachedFetchLiberalArts()),
   ]);
 
 // TODO: 이 컴포넌트에서 불필요한 연산이 발생하지 않도록 다양한 방식으로 시도해주세요.
@@ -111,7 +115,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     majors: [],
   });
 
-  const getFilteredLectures = () => {
+  const filteredLectures = useMemo(() => {
     const { query = "", credits, grades, days, times, majors } = searchOptions;
     return lectures
       .filter(
@@ -136,9 +140,8 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
         const schedules = lecture.schedule ? parseSchedule(lecture.schedule) : [];
         return schedules.some((s) => s.range.some((time) => times.includes(time)));
       });
-  };
+  }, [searchOptions, lectures]);
 
-  const filteredLectures = getFilteredLectures();
   const lastPage = Math.ceil(filteredLectures.length / PAGE_SIZE);
   const visibleLectures = filteredLectures.slice(0, page * PAGE_SIZE);
   const allMajors = [...new Set(lectures.map((lecture) => lecture.major))];
