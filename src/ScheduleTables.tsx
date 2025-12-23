@@ -10,7 +10,7 @@ import { ScheduleTableItem } from "./components/ScheduleTableItem/ScheduleTableI
  * 비즈니스 로직은 hooks로 분리
  */
 export const ScheduleTables = () => {
-  const { schedulesMap, getAllTableIds } = useScheduleContext();
+  const { schedulesMap } = useScheduleContext();
 
   const {
     tableIds,

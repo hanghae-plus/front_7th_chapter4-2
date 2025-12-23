@@ -38,7 +38,7 @@ export const ScheduleGrid = memo(
       </Grid>
     );
   },
-  (prevProps, nextProps) => {
+  () => {
     // onCellClick 참조 변경을 무시하여 불필요한 리렌더링 방지
     // handleCellClick이 안정적이므로 onCellClick이 변경되어도 리렌더링할 필요 없음
     return true; // 항상 리렌더링하지 않음 (onCellClick은 useRef로 안정화됨)

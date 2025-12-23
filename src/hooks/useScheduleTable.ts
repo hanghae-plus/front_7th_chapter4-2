@@ -13,7 +13,6 @@ interface UseScheduleTableProps {
 }
 
 interface UseScheduleTableResult {
-  colorMap: Map<string, string>;
   scheduleBgs: string[];
   deleteHandlers: Array<() => void>;
   handleCellClick: (day: string, time: number) => void;
@@ -77,7 +76,6 @@ export const useScheduleTable = ({
   }, [schedules, colorMap]);
 
   return {
-    colorMap,
     scheduleBgs,
     deleteHandlers,
     handleCellClick,
