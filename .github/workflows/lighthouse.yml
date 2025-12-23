@@ -19,8 +19,17 @@ jobs:
   lighthouse-audit:
     name: Lighthouse Audit
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Show workspace info
+        run: |
+          echo "Workspace: ${{ github.workspace }}"
+          echo "Current directory: $(pwd)"
+          ls -la
 
       - name: Use Node.js 20
         uses: actions/setup-node@v4
@@ -34,14 +43,20 @@ jobs:
 
       - name: Install dependencies
         run: |
+          echo "Current directory: $(pwd)"
           pnpm install --frozen-lockfile
           npm install -g @lhci/cli@0.14.x
 
       - name: Build project
-        run: pnpm run build
+        run: |
+          echo "Current directory: $(pwd)"
+          pnpm run build
+          echo "Build completed. Checking dist directory..."
+          ls -la dist/ | head -10 || echo "dist directory not found"
 
       - name: Start local server
         run: |
+          echo "Current directory: $(pwd)"
           npx http-server dist -p 8080 -c-1 &
           echo "Waiting for server to start..."
           for i in {1..30}; do
@@ -57,6 +72,8 @@ jobs:
         id: lighthouse
         continue-on-error: true
         run: |
+          echo "Current directory: $(pwd)"
+          echo "Workspace: ${{ github.workspace }}"
           echo "Running Lighthouse CI..."
           lhci autorun || {
             echo "Lighthouse CI failed, trying alternative method..."
@@ -67,9 +84,18 @@ jobs:
       - name: Check Lighthouse reports
         if: always()
         run: |
+          echo "Current directory: $(pwd)"
+          echo "Workspace: ${{ github.workspace }}"
           if [ -d ".lighthouseci" ]; then
             echo "Lighthouse reports directory exists"
+            echo "Files in .lighthouseci:"
             ls -la .lighthouseci/ || echo "Directory is empty"
+            echo ""
+            echo "JSON files:"
+            find .lighthouseci -name "*.json" -type f | head -10
+            echo ""
+            echo "File sizes:"
+            find .lighthouseci -name "*.json" -type f -exec ls -lh {} \; | head -10
           else
             echo "Lighthouse reports directory does not exist"
           fi
@@ -91,129 +117,125 @@ jobs:
               return;
             }
 
-            const jsonReports = fs.readdirSync(lhciDir).filter(f => f.endsWith('.json'));
+            const jsonReports = fs.readdirSync(lhciDir).filter(f => f.endsWith('.json') && !f.includes('manifest'));
 
             if (jsonReports.length === 0) {
               console.log('No JSON reports found');
+              console.log('All files in .lighthouseci:', fs.readdirSync(lhciDir));
               return;
             }
+
+            console.log('Found JSON reports:', jsonReports);
 
             const latestReport = jsonReports.sort().reverse()[0];
-
-            if (!latestReport) {
-              console.log('Failed to get latest report');
-              return;
-            }
-
             const reportPath = path.join(lhciDir, latestReport);
-
-            if (!fs.existsSync(reportPath)) {
-              console.log(`Report file not found: ${reportPath}`);
-              return;
-            }
-
-            let rawReport;
+            
+            console.log('Reading report from:', reportPath);
+            
+            let report;
             try {
               const reportContent = fs.readFileSync(reportPath, 'utf8');
-              rawReport = JSON.parse(reportContent);
-              console.log(`Report file loaded: ${latestReport}`);
-              console.log(`Report type: ${Array.isArray(rawReport) ? 'Array' : typeof rawReport}`);
+              report = JSON.parse(reportContent);
               
-              if (Array.isArray(rawReport)) {
-                console.log(`Report array length: ${rawReport.length}`);
-                if (rawReport.length > 0) {
-                  console.log(`First item keys: ${Object.keys(rawReport[0]).join(', ')}`);
+              // 리포트 구조 확인
+              console.log('Report type:', Array.isArray(report) ? 'Array' : typeof report);
+              if (Array.isArray(report)) {
+                console.log('Report is array, length:', report.length);
+                if (report.length > 0) {
+                  console.log('First item keys:', Object.keys(report[0]).slice(0, 10));
                 }
               } else {
-                console.log(`Report keys: ${Object.keys(rawReport).join(', ')}`);
+                console.log('Report top-level keys:', Object.keys(report).slice(0, 10));
               }
             } catch (e) {
               console.log(`Failed to parse report file: ${e.message}`);
               return;
             }
 
-            // Lighthouse 리포트는 배열, lhr 객체 안에 있거나 직접 최상위에 있을 수 있음
-            let report;
-            if (Array.isArray(rawReport)) {
-              report = rawReport[0]; // 배열인 경우 첫 번째 리포트 사용
-            } else {
-              report = rawReport.lhr || rawReport;
+            // 리포트가 배열이면 첫 번째 항목 사용, lhr 객체가 있으면 사용
+            if (Array.isArray(report)) {
+              console.log('Report is array, using first item');
+              report = report[0];
             }
-
-            // 디버깅 정보
-            console.log('Final report type:', typeof report);
-            if (report && typeof report === 'object') {
-              if (report.categories) {
-                console.log('Categories found:', Object.keys(report.categories));
-              } else {
-                console.log('No categories found in report');
-              }
-              if (report.audits) {
-                console.log('Audits found, sample keys:', Object.keys(report.audits).slice(0, 5));
-              } else {
-                console.log('No audits found in report');
-              }
-            } else {
-              console.log('Invalid report structure');
+            if (report && report.lhr) {
+              console.log('Report has lhr property, using it');
+              report = report.lhr;
             }
+            
+            // 최종 리포트 구조 확인
+            if (!report) {
+              console.log('ERROR: Report is null or undefined after parsing');
+              return;
+            }
+            
+            console.log('Final report keys:', Object.keys(report).slice(0, 20));
+            console.log('Has categories?', !!report.categories);
+            console.log('Has audits?', !!report.audits);
+            
+            if (!report.categories) {
+              console.log('ERROR: Report does not have categories property');
+              console.log('Report structure:', JSON.stringify(Object.keys(report)));
+              // 리포트가 유효하지 않으면 이슈를 생성하지 않음
+              return;
+            }
+            
+            if (!report.audits) {
+              console.log('WARNING: Report does not have audits property');
+            } else {
+              console.log('Audits count:', Object.keys(report.audits).length);
+            }
+            
+            console.log('Categories found:', Object.keys(report.categories));
 
-            const formatScore = (value, withPercent = true) => {
-              if (value === null || value === undefined) return 'N/A';
-              const score = Math.round(value * 100);
-              return withPercent ? `${score}%` : score;
+            const formatScore = (value = 0) => {
+              return Math.round(value * 100);
             };
 
             const getEmoji = (value, metric) => {
-              if (value === null || value === undefined || value === 'N/A') return '⚪';
-              
               const thresholds = {
                 LCP: { good: 2500, needsImprovement: 4000 },
                 INP: { good: 200, needsImprovement: 500 },
                 CLS: { good: 0.1, needsImprovement: 0.25 },
               };
               
-              if (!thresholds[metric]) {
-                const numValue = typeof value === 'number' ? value : parseFloat(value);
-                if (isNaN(numValue)) return '⚪';
-                return numValue >= 90 ? '🟢' : numValue >= 50 ? '🟠' : '🔴';
-              }
+              if (!thresholds[metric]) return value >= 90 ? '🟢' : value >= 50 ? '🟠' : '🔴';
               
               const t = thresholds[metric];
-              const numValue = typeof value === 'number' ? value : parseFloat(value);
-              if (isNaN(numValue)) return '⚪';
-              
-              if (metric === 'CLS') {
-                return numValue <= t.good ? '🟢' : numValue <= t.needsImprovement ? '🟠' : '🔴';
-              } else {
-                return numValue <= t.good ? '🟢' : numValue <= t.needsImprovement ? '🟠' : '🔴';
-              }
+              return value <= t.good ? '🟢' : value <= t.needsImprovement ? '🟠' : '🔴';
             };
 
             const formatMetric = (value, metric) => {
               if (value === null || value === undefined) return 'N/A';
-              if (metric === 'CLS') return value.toFixed(3);
+              // CLS는 0이 유효한 값일 수 있음
+              if (metric === 'CLS') {
+                if (value === 0) return '0.000';
+                return value.toFixed(3);
+              }
+              // LCP, INP는 0이면 측정 안 됨
+              if (value === 0) return 'N/A';
               return `${(value / 1000).toFixed(2)}s`;
             };
 
             const getLighthouseResult = (report, category) => {
               try {
-                const categoryData = report.categories?.[category];
-                if (!categoryData) return null;
-                return categoryData.score ?? null;
+                const score = report.categories?.[category]?.score;
+                console.log(`${category} score:`, score);
+                return score ?? 0;
               } catch (e) {
-                console.log(`Error getting ${category}: ${e.message}`);
-                return null;
+                console.log(`Error getting ${category}:`, e.message);
+                return 0;
               }
             };
 
             const getMetricValue = (report, metric) => {
               try {
                 const audit = report.audits?.[metric];
-                if (!audit) return null;
-                return audit.numericValue ?? null;
+                const value = audit?.numericValue;
+                console.log(`${metric}:`, value, '(from audit:', !!audit, ')');
+                return value ?? 0;
               } catch (e) {
-                console.log(`Error getting ${metric}: ${e.message}`);
-                return null;
+                console.log(`Error getting ${metric}:`, e.message);
+                return 0;
               }
             };
 
@@ -225,8 +247,7 @@ jobs:
               pwa: getLighthouseResult(report, 'pwa')
             };
 
-            // 디버깅: 점수 확인
-            console.log('Lighthouse scores:', lighthouseScores);
+            console.log('All lighthouse scores:', lighthouseScores);
 
             const webVitals = {
               LCP: getMetricValue(report, 'largest-contentful-paint'),
@@ -234,8 +255,7 @@ jobs:
               CLS: getMetricValue(report, 'cumulative-layout-shift')
             };
 
-            // 디버깅: Web Vitals 확인
-            console.log('Web Vitals:', webVitals);
+            console.log('All web vitals:', webVitals);
 
             const reportUrl = `.lighthouseci/${latestReport.replace('.json', '.html')}`;
 
@@ -254,11 +274,11 @@ jobs:
             ### 🎯 Lighthouse 점수
             | 카테고리 | 점수 | 상태 |
             |----------|------|------|
-            | Performance | ${formatScore(lighthouseScores.performance)} | ${getEmoji(formatScore(lighthouseScores.performance, false))} |
-            | Accessibility | ${formatScore(lighthouseScores.accessibility)} | ${getEmoji(formatScore(lighthouseScores.accessibility, false))} |
-            | Best Practices | ${formatScore(lighthouseScores['best-practices'])} | ${getEmoji(formatScore(lighthouseScores['best-practices'], false))} |
-            | SEO | ${formatScore(lighthouseScores.seo)} | ${getEmoji(formatScore(lighthouseScores.seo, false))} |
-            | PWA | ${formatScore(lighthouseScores.pwa)} | ${getEmoji(formatScore(lighthouseScores.pwa, false))} |
+            | Performance | ${formatScore(lighthouseScores.performance)}% | ${getEmoji(formatScore(lighthouseScores.performance))} |
+            | Accessibility | ${formatScore(lighthouseScores.accessibility)}% | ${getEmoji(formatScore(lighthouseScores.accessibility))} |
+            | Best Practices | ${formatScore(lighthouseScores['best-practices'])}% | ${getEmoji(formatScore(lighthouseScores['best-practices']))} |
+            | SEO | ${formatScore(lighthouseScores.seo)}% | ${getEmoji(formatScore(lighthouseScores.seo))} |
+            | PWA | ${formatScore(lighthouseScores.pwa)}% | ${getEmoji(formatScore(lighthouseScores.pwa))} |
 
             ### 📊 Core Web Vitals (2024)
             | 메트릭 | 설명 | 측정값 | 상태 |
