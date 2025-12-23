@@ -365,7 +365,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
                 <Table size="sm" variant="striped">
                   <Tbody>
                     {visibleLectures.map((lecture, index) => (
-                        <Item key={`${lecture}-${index}`} {...lecture} onClick={addSchedule()} />
+                        <Item key={`${lecture}-${index}`} {...lecture} onClick={addSchedule} />
                     ))}
                   </Tbody>
                 </Table>
