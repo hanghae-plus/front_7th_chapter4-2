@@ -10,6 +10,10 @@ on:
         description: "URL to run Lighthouse on"
         required: false
         default: "http://localhost:8080"
+      commit_message:
+        description: "커밋 메시지 (Issue 제목에 사용됩니다)"
+        required: false
+        default: "Manual workflow run"
 
 permissions:
   issues: write
@@ -112,9 +116,15 @@ jobs:
             const { execSync } = require('child_process');
 
             // 커밋 메시지에서 제목 추출
-            const commitMessage = context.eventName === 'push' 
-              ? (context.payload.head_commit?.message || 'No commit message')
-              : 'Manual workflow run';
+            let commitMessage;
+            if (context.eventName === 'push') {
+              commitMessage = context.payload.head_commit?.message || 'No commit message';
+            } else if (context.eventName === 'workflow_dispatch') {
+              // workflow_dispatch일 때는 입력값 사용
+              commitMessage = context.payload.inputs?.commit_message || 'Manual workflow run';
+            } else {
+              commitMessage = 'Manual workflow run';
+            }
             const commitTitle = commitMessage.split('\n')[0].trim();
 
             // 변경된 코드 가져오기
@@ -157,10 +167,13 @@ jobs:
             const allFiles = fs.readdirSync(lhciDir);
             console.log('Files in .lighthouseci:', allFiles);
 
-            const jsonReports = allFiles.filter(f => f.endsWith('.json'));
-            console.log('JSON reports found:', jsonReports);
+            // Lighthouse CI는 보통 -report.json 형식의 파일을 생성합니다
+            const jsonReports = allFiles.filter(f => f.endsWith('.json') && f.includes('report'));
+            // report가 없는 경우 모든 json 파일 검색
+            const allJsonReports = jsonReports.length > 0 ? jsonReports : allFiles.filter(f => f.endsWith('.json'));
+            console.log('JSON reports found:', allJsonReports);
 
-            if (jsonReports.length === 0) {
+            if (allJsonReports.length === 0) {
               console.log('❌ Lighthouse 리포트 파일이 없습니다.');
               console.log('Lighthouse CI가 실행되었지만 리포트 파일이 생성되지 않았습니다.');
               console.log('Available files:', allFiles);
@@ -168,7 +181,8 @@ jobs:
               return;
             }
 
-            const latestReport = jsonReports.sort().reverse()[0];
+            // 가장 최신 리포트 찾기 (파일명 기준)
+            const latestReport = allJsonReports.sort().reverse()[0];
             console.log('Latest report:', latestReport);
 
             if (!latestReport) {
@@ -178,45 +192,116 @@ jobs:
 
             const reportPath = path.join(lhciDir, latestReport);
             console.log('Reading report from:', reportPath);
-            const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+            const reportContent = fs.readFileSync(reportPath, 'utf8');
+            let report = JSON.parse(reportContent);
             console.log('Report loaded successfully');
 
-            const formatScore = (value = 0) => {
+            // 리포트가 배열인 경우 첫 번째 항목 사용
+            if (Array.isArray(report)) {
+              console.log('Report is an array, using first item');
+              report = report[0];
+            }
+
+            // 리포트 구조 디버깅
+            console.log('Report keys:', Object.keys(report));
+            console.log('Has categories:', !!report.categories);
+            if (report.categories) {
+              console.log('Category keys:', Object.keys(report.categories));
+              console.log('Performance score:', report.categories.performance?.score);
+            }
+            if (report.audits) {
+              console.log('Has audits:', true);
+              console.log('LCP audit:', report.audits['largest-contentful-paint']?.numericValue);
+            }
+
+            const formatScore = (value) => {
+              if (value === null || value === undefined) {
+                return 'N/A';
+              }
               return Math.round(value * 100);
             };
 
             const getEmoji = (value, metric) => {
+              if (value === null || value === undefined) {
+                return '⚪'; // 데이터 없음
+              }
+              
               const thresholds = {
                 LCP: { good: 2500, needsImprovement: 4000 },
                 INP: { good: 200, needsImprovement: 500 },
                 CLS: { good: 0.1, needsImprovement: 0.25 },
               };
               
-              if (!thresholds[metric]) return value >= 90 ? '🟢' : value >= 50 ? '🟠' : '🔴';
+              // Web Vitals 메트릭 처리
+              if (thresholds[metric]) {
+                const t = thresholds[metric];
+                // LCP, INP는 밀리초 단위, CLS는 소수점
+                if (metric === 'CLS') {
+                  return value <= t.good ? '🟢' : value <= t.needsImprovement ? '🟠' : '🔴';
+                } else {
+                  // LCP, INP는 값이 작을수록 좋음
+                  return value <= t.good ? '🟢' : value <= t.needsImprovement ? '🟠' : '🔴';
+                }
+              }
               
-              const t = thresholds[metric];
-              return value <= t.good ? '🟢' : value <= t.needsImprovement ? '🟠' : '🔴';
+              // 점수 기반 (0-100)
+              return value >= 90 ? '🟢' : value >= 50 ? '🟠' : '🔴';
             };
 
             const formatMetric = (value, metric) => {
-              if (!value) return 'N/A';
-              if (metric === 'CLS') return value.toFixed(3);
+              if (value === null || value === undefined) {
+                return 'N/A';
+              }
+              if (metric === 'CLS') {
+                return value.toFixed(3);
+              }
+              // LCP, INP는 밀리초 단위
               return `${(value / 1000).toFixed(2)}s`;
             };
 
             const getLighthouseResult = (report, category) => {
               try {
-                return report.categories?.[category]?.score ?? 0;
+                // 리포트 구조 확인
+                if (!report || !report.categories) {
+                  console.log(`Warning: Report or categories missing for ${category}`);
+                  return null;
+                }
+                
+                const categoryData = report.categories[category];
+                if (!categoryData) {
+                  console.log(`Warning: Category ${category} not found`);
+                  return null;
+                }
+                
+                const score = categoryData.score;
+                if (score === null || score === undefined) {
+                  console.log(`Warning: Score is null/undefined for ${category}`);
+                  return null;
+                }
+                
+                // score는 0-1 사이의 값이므로 그대로 반환
+                return score;
               } catch (e) {
-                return 0;
+                console.log(`Error getting result for ${category}:`, e.message);
+                return null;
               }
             };
 
             const getMetricValue = (report, metric) => {
               try {
-                return report.audits?.[metric]?.numericValue ?? 0;
+                if (!report || !report.audits) {
+                  return null;
+                }
+                
+                const audit = report.audits[metric];
+                if (!audit) {
+                  return null;
+                }
+                
+                return audit.numericValue ?? null;
               } catch (e) {
-                return 0;
+                console.log(`Error getting metric ${metric}:`, e.message);
+                return null;
               }
             };
 
@@ -255,11 +340,11 @@ jobs:
             ### 🎯 Lighthouse 점수
             | 카테고리 | 점수 | 상태 |
             |----------|------|------|
-            | Performance | ${formatScore(lighthouseScores.performance)}% | ${getEmoji(formatScore(lighthouseScores.performance))} |
-            | Accessibility | ${formatScore(lighthouseScores.accessibility)}% | ${getEmoji(formatScore(lighthouseScores.accessibility))} |
-            | Best Practices | ${formatScore(lighthouseScores['best-practices'])}% | ${getEmoji(formatScore(lighthouseScores['best-practices']))} |
-            | SEO | ${formatScore(lighthouseScores.seo)}% | ${getEmoji(formatScore(lighthouseScores.seo))} |
-            | PWA | ${formatScore(lighthouseScores.pwa)}% | ${getEmoji(formatScore(lighthouseScores.pwa))} |
+            | Performance | ${formatScore(lighthouseScores.performance)}${lighthouseScores.performance !== null ? '%' : ''} | ${getEmoji(lighthouseScores.performance !== null ? formatScore(lighthouseScores.performance) : null)} |
+            | Accessibility | ${formatScore(lighthouseScores.accessibility)}${lighthouseScores.accessibility !== null ? '%' : ''} | ${getEmoji(lighthouseScores.accessibility !== null ? formatScore(lighthouseScores.accessibility) : null)} |
+            | Best Practices | ${formatScore(lighthouseScores['best-practices'])}${lighthouseScores['best-practices'] !== null ? '%' : ''} | ${getEmoji(lighthouseScores['best-practices'] !== null ? formatScore(lighthouseScores['best-practices']) : null)} |
+            | SEO | ${formatScore(lighthouseScores.seo)}${lighthouseScores.seo !== null ? '%' : ''} | ${getEmoji(lighthouseScores.seo !== null ? formatScore(lighthouseScores.seo) : null)} |
+            | PWA | ${formatScore(lighthouseScores.pwa)}${lighthouseScores.pwa !== null ? '%' : ''} | ${getEmoji(lighthouseScores.pwa !== null ? formatScore(lighthouseScores.pwa) : null)} |
 
             ### 📊 Core Web Vitals (2024)
             | 메트릭 | 설명 | 측정값 | 상태 |
@@ -287,7 +372,9 @@ jobs:
             > 📅 측정 시간: ${timeStr}`;
 
             // Issue 제목: 커밋 메시지 제목 + 시간
-            const issueTitle = context.eventName === 'push'
+            // workflow_dispatch에서 커밋 메시지가 입력된 경우에도 사용
+            const issueTitle = (context.eventName === 'push' || 
+                               (context.eventName === 'workflow_dispatch' && commitTitle !== 'Manual workflow run'))
               ? `📊 ${commitTitle} - ${timeStr}`
               : `📊 웹사이트 성능 측정 결과 - ${timeStr}`;
 
