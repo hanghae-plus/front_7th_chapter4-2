@@ -158,10 +158,10 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
       });
   }, [lectures, searchOptions]);
 
-  const filteredLectures = useMemo(getFilteredLectures, [
-    lectures,
-    searchOptions,
-  ]);
+  const filteredLectures = useMemo(
+    () => getFilteredLectures(),
+    [getFilteredLectures]
+  );
   const allMajors = useMemo(
     () => [...new Set(lectures.map((lecture) => lecture.major))],
     [lectures]
