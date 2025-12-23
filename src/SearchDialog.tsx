@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
-  Button,
   Checkbox,
   CheckboxGroup,
   FormControl,
@@ -21,7 +20,6 @@ import {
   TagCloseButton,
   TagLabel,
   Tbody,
-  Td,
   Text,
   Th,
   Thead,
@@ -34,7 +32,8 @@ import { Lecture } from "./types.ts";
 import { createCachedFetcher, parseSchedule } from "./utils.ts";
 import axios from "axios";
 import { DAY_LABELS } from "./constants.ts";
-import { MajorList } from "./MajorList.tsx";
+import { MajorItem } from "./MajorItem.tsx";
+import { LectureItem } from "./LectureItem.tsx";
 
 interface Props {
   searchInfo: {
@@ -362,7 +361,9 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
                     borderRadius={5}
                     p={2}
                   >
-                    <MajorList allMajors={allMajors} />
+                    {allMajors.map((major) => (
+                      <MajorItem key={major} major={major} />
+                    ))}
                   </Stack>
                 </CheckboxGroup>
               </FormControl>
@@ -387,23 +388,11 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
                 <Table size='sm' variant='striped'>
                   <Tbody>
                     {visibleLectures.map((lecture, index) => (
-                      <Tr key={`${lecture.id}-${index}`}>
-                        <Td width='100px'>{lecture.id}</Td>
-                        <Td width='50px'>{lecture.grade}</Td>
-                        <Td width='200px'>{lecture.title}</Td>
-                        <Td width='50px'>{lecture.credits}</Td>
-                        <Td width='150px' dangerouslySetInnerHTML={{ __html: lecture.major }} />
-                        <Td width='150px' dangerouslySetInnerHTML={{ __html: lecture.schedule }} />
-                        <Td width='80px'>
-                          <Button
-                            size='sm'
-                            colorScheme='green'
-                            onClick={() => addSchedule(lecture)}
-                          >
-                            추가
-                          </Button>
-                        </Td>
-                      </Tr>
+                      <LectureItem
+                        key={`${lecture.id}-${index}`}
+                        lecture={lecture}
+                        onClick={addSchedule}
+                      />
                     ))}
                   </Tbody>
                 </Table>
