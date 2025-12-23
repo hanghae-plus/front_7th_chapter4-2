@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -131,6 +131,56 @@ const fetchAllLectures = async () => {
   // 두 응답의 데이터를 합쳐서 반환
   return [...results[0].data, ...results[1].data];
 };
+
+// 강의 목록 행 컴포넌트 (메모이제이션으로 불필요한 리렌더링 방지)
+const LectureRow = memo(({ lecture, onAdd }: {
+  lecture: Lecture;
+  onAdd: (lecture: Lecture) => void;
+}) => {
+  return (
+    <Tr>
+      <Td width="100px">{lecture.id}</Td>
+      <Td width="50px">{lecture.grade}</Td>
+      <Td width="200px">{lecture.title}</Td>
+      <Td width="50px">{lecture.credits}</Td>
+      <Td
+        width="150px"
+        dangerouslySetInnerHTML={{ __html: lecture.major }}
+      />
+      <Td
+        width="150px"
+        dangerouslySetInnerHTML={{ __html: lecture.schedule }}
+      />
+      <Td width="80px">
+        <Button
+          size="sm"
+          colorScheme="green"
+          onClick={() => onAdd(lecture)}
+        >
+          추가
+        </Button>
+      </Td>
+    </Tr>
+  );
+});
+
+// 전공 체크박스 컴포넌트 (메모이제이션으로 불필요한 리렌더링 방지)
+const MajorCheckbox = memo(({ major }: { major: string }) => (
+  <Box>
+    <Checkbox size="sm" value={major}>
+      {major.replace(/<p>/gi, " ")}
+    </Checkbox>
+  </Box>
+));
+
+// 시간 체크박스 컴포넌트 (메모이제이션으로 불필요한 리렌더링 방지)
+const TimeSlotCheckbox = memo(({ id, label }: { id: number; label: string }) => (
+  <Box>
+    <Checkbox size="sm" value={id}>
+      {id}교시({label})
+    </Checkbox>
+  </Box>
+));
 
 // TODO: 이 컴포넌트에서 불필요한 연산이 발생하지 않도록 다양한 방식으로 시도해주세요.
 const SearchDialog = ({ searchInfo, onClose }: Props) => {
@@ -382,11 +432,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
                     p={2}
                   >
                     {TIME_SLOTS.map(({ id, label }) => (
-                      <Box key={id}>
-                        <Checkbox key={id} size="sm" value={id}>
-                          {id}교시({label})
-                        </Checkbox>
-                      </Box>
+                      <TimeSlotCheckbox key={id} id={id} label={label} />
                     ))}
                   </Stack>
                 </CheckboxGroup>
@@ -431,11 +477,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
                     p={2}
                   >
                     {allMajors.map((major) => (
-                      <Box key={major}>
-                        <Checkbox key={major} size="sm" value={major}>
-                          {major.replace(/<p>/gi, " ")}
-                        </Checkbox>
-                      </Box>
+                      <MajorCheckbox key={major} major={major} />
                     ))}
                   </Stack>
                 </CheckboxGroup>
@@ -461,29 +503,11 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
                 <Table size="sm" variant="striped">
                   <Tbody>
                     {visibleLectures.map((lecture, index) => (
-                      <Tr key={`${lecture.id}-${index}`}>
-                        <Td width="100px">{lecture.id}</Td>
-                        <Td width="50px">{lecture.grade}</Td>
-                        <Td width="200px">{lecture.title}</Td>
-                        <Td width="50px">{lecture.credits}</Td>
-                        <Td
-                          width="150px"
-                          dangerouslySetInnerHTML={{ __html: lecture.major }}
-                        />
-                        <Td
-                          width="150px"
-                          dangerouslySetInnerHTML={{ __html: lecture.schedule }}
-                        />
-                        <Td width="80px">
-                          <Button
-                            size="sm"
-                            colorScheme="green"
-                            onClick={() => addSchedule(lecture)}
-                          >
-                            추가
-                          </Button>
-                        </Td>
-                      </Tr>
+                      <LectureRow
+                        key={`${lecture.id}-${index}`}
+                        lecture={lecture}
+                        onAdd={addSchedule}
+                      />
                     ))}
                   </Tbody>
                 </Table>
