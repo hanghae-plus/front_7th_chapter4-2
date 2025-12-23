@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
-  Button,
   HStack,
   Modal,
   ModalBody,
@@ -11,7 +10,6 @@ import {
   ModalOverlay,
   Table,
   Tbody,
-  Td,
   Text,
   Th,
   Thead,
@@ -19,8 +17,8 @@ import {
   VStack,
 } from "@chakra-ui/react";
 import { useScheduleContext } from "./ScheduleContext.tsx";
-import { Lecture } from "./types.ts";
-import { parseSchedule } from "./utils.ts";
+import { Lecture } from "../types";
+import { parseSchedule } from "../utils";
 import axios from "axios";
 import {
   SearchQueryFilter,
@@ -30,6 +28,7 @@ import {
   TimesFilter,
   MajorsFilter,
 } from "./SearchFilters.tsx";
+import { LectureRow } from "./LectureRow.tsx";
 
 interface Props {
   searchInfo: {
@@ -125,29 +124,47 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
   }, []);
 
   // 각 필터별 특화된 콜백 (React.memo 최적화를 위해)
-  const handleQueryChange = useCallback((value: string) => {
-    changeSearchOption("query", value);
-  }, [changeSearchOption]);
+  const handleQueryChange = useCallback(
+    (value: string) => {
+      changeSearchOption("query", value);
+    },
+    [changeSearchOption]
+  );
 
-  const handleCreditsChange = useCallback((value: string) => {
-    changeSearchOption("credits", value);
-  }, [changeSearchOption]);
+  const handleCreditsChange = useCallback(
+    (value: string) => {
+      changeSearchOption("credits", value);
+    },
+    [changeSearchOption]
+  );
 
-  const handleGradesChange = useCallback((value: number[]) => {
-    changeSearchOption("grades", value);
-  }, [changeSearchOption]);
+  const handleGradesChange = useCallback(
+    (value: number[]) => {
+      changeSearchOption("grades", value);
+    },
+    [changeSearchOption]
+  );
 
-  const handleDaysChange = useCallback((value: string[]) => {
-    changeSearchOption("days", value);
-  }, [changeSearchOption]);
+  const handleDaysChange = useCallback(
+    (value: string[]) => {
+      changeSearchOption("days", value);
+    },
+    [changeSearchOption]
+  );
 
-  const handleTimesChange = useCallback((value: number[]) => {
-    changeSearchOption("times", value);
-  }, [changeSearchOption]);
+  const handleTimesChange = useCallback(
+    (value: number[]) => {
+      changeSearchOption("times", value);
+    },
+    [changeSearchOption]
+  );
 
-  const handleMajorsChange = useCallback((value: string[]) => {
-    changeSearchOption("majors", value);
-  }, [changeSearchOption]);
+  const handleMajorsChange = useCallback(
+    (value: string[]) => {
+      changeSearchOption("majors", value);
+    },
+    [changeSearchOption]
+  );
 
   const addSchedule = useCallback(
     (lecture: Lecture) => {
@@ -231,16 +248,8 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
             </HStack>
 
             <HStack spacing={4}>
-              <TimesFilter
-                value={searchOptions.times}
-                sortedTimes={sortedTimes}
-                onChange={handleTimesChange}
-              />
-              <MajorsFilter
-                value={searchOptions.majors}
-                allMajors={allMajors}
-                onChange={handleMajorsChange}
-              />
+              <TimesFilter value={searchOptions.times} sortedTimes={sortedTimes} onChange={handleTimesChange} />
+              <MajorsFilter value={searchOptions.majors} allMajors={allMajors} onChange={handleMajorsChange} />
             </HStack>
             <Text align="right">검색결과: {filteredLectures.length}개</Text>
             <Box>
@@ -262,19 +271,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
                 <Table size="sm" variant="striped">
                   <Tbody>
                     {visibleLectures.map((lecture, index) => (
-                      <Tr key={`${lecture.id}-${index}`}>
-                        <Td width="100px">{lecture.id}</Td>
-                        <Td width="50px">{lecture.grade}</Td>
-                        <Td width="200px">{lecture.title}</Td>
-                        <Td width="50px">{lecture.credits}</Td>
-                        <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.major }} />
-                        <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.schedule }} />
-                        <Td width="80px">
-                          <Button size="sm" colorScheme="green" onClick={() => addSchedule(lecture)}>
-                            추가
-                          </Button>
-                        </Td>
-                      </Tr>
+                      <LectureRow key={`${lecture.id}-${index}`} lecture={lecture} onAdd={addSchedule} />
                     ))}
                   </Tbody>
                 </Table>

@@ -14,7 +14,7 @@ import {
   TagLabel,
   Wrap,
 } from "@chakra-ui/react";
-import { DAY_LABELS } from "./constants.ts";
+import { DAY_LABELS } from "../constants";
 
 const TIME_SLOTS = [
   { id: 1, label: "09:00~09:30" },
@@ -52,11 +52,7 @@ export const SearchQueryFilter = memo(({ value, onChange }: SearchQueryFilterPro
   return (
     <FormControl>
       <FormLabel>검색어</FormLabel>
-      <Input
-        placeholder="과목명 또는 과목코드"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <Input placeholder="과목명 또는 과목코드" value={value} onChange={(e) => onChange(e.target.value)} />
     </FormControl>
   );
 });
@@ -93,10 +89,7 @@ export const GradesFilter = memo(({ value, onChange }: GradesFilterProps) => {
   return (
     <FormControl>
       <FormLabel>학년</FormLabel>
-      <CheckboxGroup
-        value={value}
-        onChange={(values) => onChange(values.map(Number))}
-      >
+      <CheckboxGroup value={value} onChange={(values) => onChange(values.map(Number))}>
         <HStack spacing={4}>
           {[1, 2, 3, 4].map((grade) => (
             <Checkbox key={grade} value={grade}>
@@ -120,10 +113,7 @@ export const DaysFilter = memo(({ value, onChange }: DaysFilterProps) => {
   return (
     <FormControl>
       <FormLabel>요일</FormLabel>
-      <CheckboxGroup
-        value={value}
-        onChange={(values) => onChange(values as string[])}
-      >
+      <CheckboxGroup value={value} onChange={(values) => onChange(values as string[])}>
         <HStack spacing={4}>
           {DAY_LABELS.map((day) => (
             <Checkbox key={day} value={day}>
@@ -152,11 +142,7 @@ export const TimesFilter = memo(({ value, sortedTimes, onChange }: TimesFilterPr
   return (
     <FormControl>
       <FormLabel>시간</FormLabel>
-      <CheckboxGroup
-        colorScheme="green"
-        value={value}
-        onChange={(values) => onChange(values.map(Number))}
-      >
+      <CheckboxGroup colorScheme="green" value={value} onChange={(values) => onChange(values.map(Number))}>
         <Wrap spacing={1} mb={2}>
           {sortedTimes.map((time) => (
             <Tag key={time} size="sm" variant="outline" colorScheme="blue">
@@ -165,15 +151,7 @@ export const TimesFilter = memo(({ value, sortedTimes, onChange }: TimesFilterPr
             </Tag>
           ))}
         </Wrap>
-        <Stack
-          spacing={2}
-          overflowY="auto"
-          h="100px"
-          border="1px solid"
-          borderColor="gray.200"
-          borderRadius={5}
-          p={2}
-        >
+        <Stack spacing={2} overflowY="auto" h="100px" border="1px solid" borderColor="gray.200" borderRadius={5} p={2}>
           {TIME_SLOTS.map(({ id, label }) => (
             <Box key={id}>
               <Checkbox key={id} size="sm" value={id}>
@@ -203,11 +181,7 @@ export const MajorsFilter = memo(({ value, allMajors, onChange }: MajorsFilterPr
   return (
     <FormControl>
       <FormLabel>전공</FormLabel>
-      <CheckboxGroup
-        colorScheme="green"
-        value={value}
-        onChange={(values) => onChange(values as string[])}
-      >
+      <CheckboxGroup colorScheme="green" value={value} onChange={(values) => onChange(values as string[])}>
         <Wrap spacing={1} mb={2}>
           {value.map((major) => (
             <Tag key={major} size="sm" variant="outline" colorScheme="blue">
@@ -216,15 +190,7 @@ export const MajorsFilter = memo(({ value, allMajors, onChange }: MajorsFilterPr
             </Tag>
           ))}
         </Wrap>
-        <Stack
-          spacing={2}
-          overflowY="auto"
-          h="100px"
-          border="1px solid"
-          borderColor="gray.200"
-          borderRadius={5}
-          p={2}
-        >
+        <Stack spacing={2} overflowY="auto" h="100px" border="1px solid" borderColor="gray.200" borderRadius={5} p={2}>
           {allMajors.map((major) => (
             <Box key={major}>
               <Checkbox key={major} size="sm" value={major}>
