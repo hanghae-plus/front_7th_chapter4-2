@@ -112,50 +112,108 @@ jobs:
               return;
             }
 
-            let report;
+            let rawReport;
             try {
-              report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+              const reportContent = fs.readFileSync(reportPath, 'utf8');
+              rawReport = JSON.parse(reportContent);
+              console.log(`Report file loaded: ${latestReport}`);
+              console.log(`Report type: ${Array.isArray(rawReport) ? 'Array' : typeof rawReport}`);
+              
+              if (Array.isArray(rawReport)) {
+                console.log(`Report array length: ${rawReport.length}`);
+                if (rawReport.length > 0) {
+                  console.log(`First item keys: ${Object.keys(rawReport[0]).join(', ')}`);
+                }
+              } else {
+                console.log(`Report keys: ${Object.keys(rawReport).join(', ')}`);
+              }
             } catch (e) {
               console.log(`Failed to parse report file: ${e.message}`);
               return;
             }
 
-            const formatScore = (value = 0) => {
-              return Math.round(value * 100);
+            // Lighthouse 리포트는 배열, lhr 객체 안에 있거나 직접 최상위에 있을 수 있음
+            let report;
+            if (Array.isArray(rawReport)) {
+              report = rawReport[0]; // 배열인 경우 첫 번째 리포트 사용
+            } else {
+              report = rawReport.lhr || rawReport;
+            }
+
+            // 디버깅 정보
+            console.log('Final report type:', typeof report);
+            if (report && typeof report === 'object') {
+              if (report.categories) {
+                console.log('Categories found:', Object.keys(report.categories));
+              } else {
+                console.log('No categories found in report');
+              }
+              if (report.audits) {
+                console.log('Audits found, sample keys:', Object.keys(report.audits).slice(0, 5));
+              } else {
+                console.log('No audits found in report');
+              }
+            } else {
+              console.log('Invalid report structure');
+            }
+
+            const formatScore = (value, withPercent = true) => {
+              if (value === null || value === undefined) return 'N/A';
+              const score = Math.round(value * 100);
+              return withPercent ? `${score}%` : score;
             };
 
             const getEmoji = (value, metric) => {
+              if (value === null || value === undefined || value === 'N/A') return '⚪';
+              
               const thresholds = {
                 LCP: { good: 2500, needsImprovement: 4000 },
                 INP: { good: 200, needsImprovement: 500 },
                 CLS: { good: 0.1, needsImprovement: 0.25 },
               };
               
-              if (!thresholds[metric]) return value >= 90 ? '🟢' : value >= 50 ? '🟠' : '🔴';
+              if (!thresholds[metric]) {
+                const numValue = typeof value === 'number' ? value : parseFloat(value);
+                if (isNaN(numValue)) return '⚪';
+                return numValue >= 90 ? '🟢' : numValue >= 50 ? '🟠' : '🔴';
+              }
               
               const t = thresholds[metric];
-              return value <= t.good ? '🟢' : value <= t.needsImprovement ? '🟠' : '🔴';
+              const numValue = typeof value === 'number' ? value : parseFloat(value);
+              if (isNaN(numValue)) return '⚪';
+              
+              if (metric === 'CLS') {
+                return numValue <= t.good ? '🟢' : numValue <= t.needsImprovement ? '🟠' : '🔴';
+              } else {
+                return numValue <= t.good ? '🟢' : numValue <= t.needsImprovement ? '🟠' : '🔴';
+              }
             };
 
             const formatMetric = (value, metric) => {
-              if (!value) return 'N/A';
+              if (value === null || value === undefined) return 'N/A';
               if (metric === 'CLS') return value.toFixed(3);
               return `${(value / 1000).toFixed(2)}s`;
             };
 
             const getLighthouseResult = (report, category) => {
               try {
-                return report.categories?.[category]?.score ?? 0;
+                const categoryData = report.categories?.[category];
+                if (!categoryData) return null;
+                return categoryData.score ?? null;
               } catch (e) {
-                return 0;
+                console.log(`Error getting ${category}: ${e.message}`);
+                return null;
               }
             };
 
             const getMetricValue = (report, metric) => {
               try {
-                return report.audits?.[metric]?.numericValue ?? 0;
+                const audit = report.audits?.[metric];
+                if (!audit) return null;
+                return audit.numericValue ?? null;
               } catch (e) {
-                return 0;
+                console.log(`Error getting ${metric}: ${e.message}`);
+                return null;
               }
             };
 
@@ -167,24 +225,40 @@ jobs:
               pwa: getLighthouseResult(report, 'pwa')
             };
 
+            // 디버깅: 점수 확인
+            console.log('Lighthouse scores:', lighthouseScores);
+
             const webVitals = {
               LCP: getMetricValue(report, 'largest-contentful-paint'),
               INP: getMetricValue(report, 'experimental-interaction-to-next-paint'),
               CLS: getMetricValue(report, 'cumulative-layout-shift')
             };
 
+            // 디버깅: Web Vitals 확인
+            console.log('Web Vitals:', webVitals);
+
             const reportUrl = `.lighthouseci/${latestReport.replace('.json', '.html')}`;
 
+            // 커밋 정보 가져오기
+            const commitSha = context.sha;
+            const commitMessage = context.payload.head_commit?.message || 'No commit message';
+            const commitLink = `https://github.com/${context.repo.owner}/${context.repo.repo}/commit/${commitSha}`;
+            const shortSha = commitSha ? commitSha.substring(0, 7) : 'unknown';
+
             const body = `## 🚨 웹사이트 성능 측정 결과
+
+            ### 📌 최신 커밋 정보
+            - **커밋**: [\`${shortSha}\`](${commitLink})
+            - **커밋 메시지**: ${commitMessage.split('\n')[0].trim()}
 
             ### 🎯 Lighthouse 점수
             | 카테고리 | 점수 | 상태 |
             |----------|------|------|
-            | Performance | ${formatScore(lighthouseScores.performance)}% | ${getEmoji(formatScore(lighthouseScores.performance))} |
-            | Accessibility | ${formatScore(lighthouseScores.accessibility)}% | ${getEmoji(formatScore(lighthouseScores.accessibility))} |
-            | Best Practices | ${formatScore(lighthouseScores['best-practices'])}% | ${getEmoji(formatScore(lighthouseScores['best-practices']))} |
-            | SEO | ${formatScore(lighthouseScores.seo)}% | ${getEmoji(formatScore(lighthouseScores.seo))} |
-            | PWA | ${formatScore(lighthouseScores.pwa)}% | ${getEmoji(formatScore(lighthouseScores.pwa))} |
+            | Performance | ${formatScore(lighthouseScores.performance)} | ${getEmoji(formatScore(lighthouseScores.performance, false))} |
+            | Accessibility | ${formatScore(lighthouseScores.accessibility)} | ${getEmoji(formatScore(lighthouseScores.accessibility, false))} |
+            | Best Practices | ${formatScore(lighthouseScores['best-practices'])} | ${getEmoji(formatScore(lighthouseScores['best-practices'], false))} |
+            | SEO | ${formatScore(lighthouseScores.seo)} | ${getEmoji(formatScore(lighthouseScores.seo, false))} |
+            | PWA | ${formatScore(lighthouseScores.pwa)} | ${getEmoji(formatScore(lighthouseScores.pwa, false))} |
 
             ### 📊 Core Web Vitals (2024)
             | 메트릭 | 설명 | 측정값 | 상태 |
