@@ -31,15 +31,19 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies
+      - name: Install dependencies & build app
         run: |
-          npm install -g @lhci/cli@0.14.x
-          npm install -g http-server
+          # Lighthouse CLI & static server 설치
+          npm install -g @lhci/cli@0.14.x http-server pnpm
 
-      - name: Start local server
+          # 프로젝트 의존성 설치 및 빌드 (pnpm.lock 기반)
+          pnpm install --frozen-lockfile
+          pnpm run build
+
+      - name: Start local server (serve built dist)
         run: |
-          http-server . -p 8080 &
-          sleep 3
+          http-server dist -p 8080 &
+          sleep 5
           curl -f http://localhost:8080 || exit 1
 
       - name: Run Lighthouse CI
