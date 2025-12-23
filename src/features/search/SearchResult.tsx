@@ -1,4 +1,12 @@
-import { memo, RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  memo,
+  RefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Box,
   Button,
@@ -13,6 +21,7 @@ import {
 import { useScheduleContext } from '../schedules/ScheduleContext.tsx';
 import { Lecture, SearchInfo, SearchOption } from '../../types.ts';
 import { parseSchedule } from '../../utils.ts';
+import { filterLectures } from './services/lectureFilterService.ts';
 
 const PAGE_SIZE = 100;
 
@@ -23,13 +32,24 @@ interface Props {
   onClose: () => void;
 }
 
-const SearchResult = ({ searchInfo, lectures, searchOptions, onClose }: Props) => {
+const SearchResult = ({
+  searchInfo,
+  lectures,
+  searchOptions,
+  onClose,
+}: Props) => {
   const { setSchedulesMap } = useScheduleContext();
-
-  const [page, setPage] = useState(1);
 
   const loaderWrapperRef = useRef<HTMLDivElement>(null);
   const loaderRef = useRef<HTMLDivElement>(null);
+
+  const [page, setPage] = useState(1);
+
+  const filteredLectures = useMemo(
+    () => filterLectures(lectures, searchOptions),
+    [lectures, searchOptions],
+  );
+  const lastPage = Math.ceil(filteredLectures.length / PAGE_SIZE);
 
   const addSchedule = useCallback(
     (lecture: Lecture) => {
@@ -51,53 +71,6 @@ const SearchResult = ({ searchInfo, lectures, searchOptions, onClose }: Props) =
     },
     [searchInfo, setSchedulesMap, onClose],
   );
-
-  const getFilteredLectures = useCallback(
-    ({ query = '', credits, grades, days, times, majors }: SearchOption) => {
-      return lectures
-        .filter(
-          (lecture) =>
-            lecture.title.toLowerCase().includes(query.toLowerCase()) ||
-            lecture.id.toLowerCase().includes(query.toLowerCase()),
-        )
-        .filter(
-          (lecture) => grades.length === 0 || grades.includes(lecture.grade),
-        )
-        .filter(
-          (lecture) => majors.length === 0 || majors.includes(lecture.major),
-        )
-        .filter(
-          (lecture) => !credits || lecture.credits.startsWith(String(credits)),
-        )
-        .filter((lecture) => {
-          if (days.length === 0) {
-            return true;
-          }
-          const schedules = lecture.schedule
-            ? parseSchedule(lecture.schedule)
-            : [];
-          return schedules.some((s) => days.includes(s.day));
-        })
-        .filter((lecture) => {
-          if (times.length === 0) {
-            return true;
-          }
-          const schedules = lecture.schedule
-            ? parseSchedule(lecture.schedule)
-            : [];
-          return schedules.some((s) =>
-            s.range.some((time) => times.includes(time)),
-          );
-        });
-    },
-    [lectures],
-  );
-
-  const filteredLectures = useMemo(() => {
-    return getFilteredLectures(searchOptions);
-  }, [getFilteredLectures, searchOptions]);
-
-  const lastPage = Math.ceil(filteredLectures.length / PAGE_SIZE);
 
   useEffect(() => {
     const $loader = loaderRef.current;
@@ -131,7 +104,6 @@ const SearchResult = ({ searchInfo, lectures, searchOptions, onClose }: Props) =
       <Text align="right">검색결과: {filteredLectures.length}개</Text>
       <Box>
         <TableHead />
-
         <LectureTable
           filteredLectures={filteredLectures}
           page={page}
