@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -32,17 +32,8 @@ import {
 import { useScheduleContext } from "./ScheduleContext.tsx";
 import { Lecture } from "./types.ts";
 import { parseSchedule } from "./utils.ts";
-import axios from "axios";
 import { DAY_LABELS } from "./constants.ts";
-
-interface Props {
-  searchInfo: {
-    tableId: string;
-    day?: string;
-    time?: number;
-  } | null;
-  onClose: () => void;
-}
+import { useLectures } from "./hooks/useLectures.ts";
 
 interface SearchOption {
   query?: string;
@@ -51,6 +42,17 @@ interface SearchOption {
   times: number[];
   majors: string[];
   credits?: number;
+}
+
+const PAGE_SIZE = 100;
+
+interface Props {
+  searchInfo: {
+    tableId: string;
+    day?: string;
+    time?: number;
+  } | null;
+  onClose: () => void;
 }
 
 const TIME_SLOTS = [
@@ -80,25 +82,15 @@ const TIME_SLOTS = [
   { id: 24, label: "22:35~23:25" },
 ];
 
-const PAGE_SIZE = 100;
-
-const fetchMajors = () => axios.get<Lecture[]>("/schedules-majors.json");
-const fetchLiberalArts = () =>
-  axios.get<Lecture[]>("/schedules-liberal-arts.json");
-
-// Promise.all을 사용하여 두 API를 병렬로 호출하여 성능 최적화
-const fetchAllLectures = () => {
-  console.log("API 호출 시작", performance.now());
-  return Promise.all([fetchMajors(), fetchLiberalArts()]);
-};
-
-// TODO: 이 컴포넌트에서 불필요한 연산이 발생하지 않도록 다양한 방식으로 시도해주세요.
 const SearchDialog = ({ searchInfo, onClose }: Props) => {
   const { setSchedulesMap } = useScheduleContext();
 
   const loaderWrapperRef = useRef<HTMLDivElement>(null);
   const loaderRef = useRef<HTMLDivElement>(null);
-  const [lectures, setLectures] = useState<Lecture[]>([]);
+
+  // 강의 데이터를 가져오는 커스텀 훅 사용 (캐시 포함)
+  const { lectures } = useLectures();
+
   const [page, setPage] = useState(1);
   const [searchOptions, setSearchOptions] = useState<SearchOption>({
     query: "",
@@ -108,87 +100,109 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     majors: [],
   });
 
-  const getFilteredLectures = () => {
+  // 필터링된 강의 목록 계산
+  const filteredLectures = useMemo(() => {
     const { query = "", credits, grades, days, times, majors } = searchOptions;
-    return lectures
-      .filter(
-        (lecture) =>
-          lecture.title.toLowerCase().includes(query.toLowerCase()) ||
-          lecture.id.toLowerCase().includes(query.toLowerCase())
-      )
-      .filter(
-        (lecture) => grades.length === 0 || grades.includes(lecture.grade)
-      )
-      .filter(
-        (lecture) => majors.length === 0 || majors.includes(lecture.major)
-      )
-      .filter(
-        (lecture) => !credits || lecture.credits.startsWith(String(credits))
-      )
-      .filter((lecture) => {
-        if (days.length === 0) {
-          return true;
-        }
+    const queryLower = query.toLowerCase();
+
+    return lectures.filter((lecture) => {
+      // 검색어 필터
+      if (
+        query &&
+        !lecture.title.toLowerCase().includes(queryLower) &&
+        !lecture.id.toLowerCase().includes(queryLower)
+      ) {
+        return false;
+      }
+
+      // 학년 필터
+      if (grades.length > 0 && !grades.includes(lecture.grade)) {
+        return false;
+      }
+
+      // 전공 필터
+      if (majors.length > 0 && !majors.includes(lecture.major)) {
+        return false;
+      }
+
+      // 학점 필터
+      if (credits && !lecture.credits.startsWith(String(credits))) {
+        return false;
+      }
+
+      // 요일 필터
+      if (days.length > 0) {
         const schedules = lecture.schedule
           ? parseSchedule(lecture.schedule)
           : [];
-        return schedules.some((s) => days.includes(s.day));
-      })
-      .filter((lecture) => {
-        if (times.length === 0) {
-          return true;
+        if (!schedules.some((s) => days.includes(s.day))) {
+          return false;
         }
+      }
+
+      // 시간 필터
+      if (times.length > 0) {
         const schedules = lecture.schedule
           ? parseSchedule(lecture.schedule)
           : [];
-        return schedules.some((s) =>
-          s.range.some((time) => times.includes(time))
-        );
-      });
-  };
+        if (
+          !schedules.some((s) => s.range.some((time) => times.includes(time)))
+        ) {
+          return false;
+        }
+      }
 
-  const filteredLectures = getFilteredLectures();
-  const lastPage = Math.ceil(filteredLectures.length / PAGE_SIZE);
-  const visibleLectures = filteredLectures.slice(0, page * PAGE_SIZE);
-  const allMajors = [...new Set(lectures.map((lecture) => lecture.major))];
-
-  const changeSearchOption = (
-    field: keyof SearchOption,
-    value: SearchOption[typeof field]
-  ) => {
-    setPage(1);
-    setSearchOptions({ ...searchOptions, [field]: value });
-    loaderWrapperRef.current?.scrollTo(0, 0);
-  };
-
-  const addSchedule = (lecture: Lecture) => {
-    if (!searchInfo) return;
-
-    const { tableId } = searchInfo;
-
-    const schedules = parseSchedule(lecture.schedule).map((schedule) => ({
-      ...schedule,
-      lecture,
-    }));
-
-    setSchedulesMap((prev) => ({
-      ...prev,
-      [tableId]: [...prev[tableId], ...schedules],
-    }));
-
-    onClose();
-  };
-
-  useEffect(() => {
-    const start = performance.now();
-    console.log("API 호출 시작: ", start);
-    fetchAllLectures().then((results) => {
-      const end = performance.now();
-      console.log("모든 API 호출 완료 ", end);
-      console.log("API 호출에 걸린 시간(ms): ", end - start);
-      setLectures(results.flatMap((result) => result.data));
+      return true;
     });
-  }, []);
+  }, [lectures, searchOptions]);
+
+  // 전체 페이지 수 계산
+  const lastPage = useMemo(
+    () => Math.ceil(filteredLectures.length / PAGE_SIZE),
+    [filteredLectures.length]
+  );
+
+  // 현재 페이지에 보이는 강의 목록
+  const visibleLectures = useMemo(
+    () => filteredLectures.slice(0, page * PAGE_SIZE),
+    [filteredLectures, page]
+  );
+
+  // 모든 전공 목록
+  const allMajors = useMemo(
+    () => [...new Set(lectures.map((lecture) => lecture.major))],
+    [lectures]
+  );
+
+  const changeSearchOption = useCallback(
+    (field: keyof SearchOption, value: SearchOption[typeof field]) => {
+      setPage(1);
+      setSearchOptions((prev) => ({ ...prev, [field]: value }));
+      loaderWrapperRef.current?.scrollTo(0, 0);
+    },
+    []
+  );
+
+  const addSchedule = useCallback(
+    (lecture: Lecture) => {
+      if (!searchInfo) return;
+
+      const { tableId } = searchInfo;
+
+      const schedules = parseSchedule(lecture.schedule).map((schedule) => ({
+        ...schedule,
+        lecture,
+      }));
+
+      setSchedulesMap((prev) => ({
+        ...prev,
+        [tableId]: [...prev[tableId], ...schedules],
+      }));
+
+      onClose();
+    },
+    [searchInfo, setSchedulesMap, onClose]
+  );
 
   useEffect(() => {
     const $loader = loaderRef.current;
