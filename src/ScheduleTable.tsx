@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import {
   Box,
   Button,
@@ -27,8 +26,8 @@ import {
   DragEndEvent,
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { ComponentProps, Fragment, memo, useCallback } from "react";
-// [Check] Context 분리 적용 여부에 따라 import 경로 확인 (useScheduleDispatch 사용 시)
+import { ComponentProps, Fragment, memo, useCallback, useMemo } from "react";
+// Context에서 직접 Dispatch를 가져오기 위해 import
 import { useScheduleDispatch } from "./ScheduleContext.tsx";
 
 interface Props {
@@ -120,8 +119,7 @@ const DraggableSchedule = memo(
   }
 );
 
-// 이 컴포넌트는 schedules(데이터)를 prop으로 받지 않습니다.
-// 따라서 부모가 리렌더링되어도, tableId와 핸들러가 같다면 리렌더링되지 않습니다.
+// [GridBackground]
 const GridBackground = memo(
   ({
     tableId,
@@ -133,7 +131,6 @@ const GridBackground = memo(
       timeInfo: { day: string; time: number }
     ) => void;
   }) => {
-      console.log(`❌ [GridBackground] 배경 렌더링 (Table: ${tableId}) - 이게 뜨면 안 됨!`);
     return (
       <>
         <GridItem key="교시" borderColor="gray.300" bg="gray.100">
@@ -189,11 +186,9 @@ const GridBackground = memo(
   }
 );
 
-
-// '강의 데이터'가 바뀔 때 리렌더링됩니다.
+// [ScheduleTableGrid]
 const ScheduleTableGrid = memo(
   ({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
-      console.log(`[ScheduleTableGrid] 렌더링 확인 (Table: ${tableId})`);
     const getColor = (lectureId: string): string => {
       const lectures = [
         ...new Set(schedules.map(({ lecture }) => lecture?.id)),
@@ -202,9 +197,6 @@ const ScheduleTableGrid = memo(
       return colors[lectures.indexOf(lectureId) % colors.length];
     };
 
-    // [최적화] GridBackground '엘리먼트' 자체를 메모이제이션
-    // 이제 부모가 리렌더링되어도, 아래 의존성 배열의 값이 변하지 않으면
-    // 이 변수는 '이전과 완전히 똑같은 객체'를 반환합니다.
     const gridBackground = useMemo(() => (
       <GridBackground
         tableId={tableId}
@@ -222,13 +214,10 @@ const ScheduleTableGrid = memo(
         outline="1px solid"
         outlineColor="gray.300"
       >
-        {/* 메모이제이션된 엘리먼트 사용 */}
         {gridBackground}
 
-        {/* 변하는 데이터 (강의) */}
         {schedules.map((schedule, index) => {
           if (!schedule.lecture) return null;
-
           return (
             <DraggableSchedule
               key={`${schedule.lecture.title}-${index}`}
@@ -311,9 +300,11 @@ function createSnapModifier(): Modifier {
 
 const modifiers = [createSnapModifier()];
 
+// 🌟 [핵심] ScheduleTable Main Component
+// 여기서 두 번째 인자(비교 함수)를 사용하여 불필요한 렌더링을 강제로 막습니다.
 export const ScheduleTable = memo(
   ({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
-    // [유지] Dispatch Hook을 사용하여 상태 변경 로직만 가져옴 (Context 분리 유지)
+    // Context에서 Dispatch 가져오기
     const { setSchedulesMap } = useScheduleDispatch();
 
     const sensors = useSensors(
@@ -368,6 +359,19 @@ export const ScheduleTable = memo(
           onDeleteButtonClick={onDeleteButtonClick}
         />
       </DndContext>
+    );
+  },
+  // 이전 Props와 다음 Props를 비교하여, 
+  // 1) tableId가 같고
+  // 2) schedules 참조가 같고 (내용이 안 변했으면)
+  // 3) 핸들러들도 같다면
+  // => "true"를 반환하여 리렌더링을 차단합니다.
+  (prevProps, nextProps) => {
+    return (
+      prevProps.tableId === nextProps.tableId &&
+      prevProps.schedules === nextProps.schedules &&
+      prevProps.onScheduleTimeClick === nextProps.onScheduleTimeClick &&
+      prevProps.onDeleteButtonClick === nextProps.onDeleteButtonClick
     );
   }
 );
