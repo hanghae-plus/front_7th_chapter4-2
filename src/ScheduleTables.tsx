@@ -1,6 +1,6 @@
 import { Button, ButtonGroup, Flex, Heading, Stack } from "@chakra-ui/react";
 import { ScheduleTable } from "./ScheduleTable.tsx";
-import { useScheduleContext } from "./ScheduleContext.tsx";
+import { useScheduleContext, useScheduleDispatch } from "./ScheduleContext.tsx"; // H
 import SearchDialog from "./SearchDialog.tsx";
 import { useState, useCallback, memo } from "react";
 import { Schedule } from "./types.ts";
@@ -73,7 +73,8 @@ const ScheduleTableWrapper = memo(
 );
 
 export const ScheduleTables = () => {
-  const { schedulesMap, setSchedulesMap } = useScheduleContext();
+  const { schedulesMap } = useScheduleContext();
+  const { setSchedulesMap } = useScheduleDispatch();
   const [searchInfo, setSearchInfo] = useState<{
     tableId: string;
     day?: string;

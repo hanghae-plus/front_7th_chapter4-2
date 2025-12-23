@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import {
   Box,
   Button,
@@ -27,7 +28,8 @@ import {
 } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { ComponentProps, Fragment, memo, useCallback } from "react";
-import { useScheduleContext } from "./ScheduleContext.tsx";
+// [Check] Context 분리 적용 여부에 따라 import 경로 확인 (useScheduleDispatch 사용 시)
+import { useScheduleDispatch } from "./ScheduleContext.tsx";
 
 interface Props {
   tableId: string;
@@ -118,9 +120,8 @@ const DraggableSchedule = memo(
   }
 );
 
-// [최적화] GridBackground
-// 변하지 않는 배경(시간, 요일 칸)을 별도 컴포넌트로 분리하고 memo를 적용합니다.
-// 이제 강의 데이터(schedules)가 변해도 이 수백 개의 GridItem들은 다시 그려지지 않습니다.
+// 이 컴포넌트는 schedules(데이터)를 prop으로 받지 않습니다.
+// 따라서 부모가 리렌더링되어도, tableId와 핸들러가 같다면 리렌더링되지 않습니다.
 const GridBackground = memo(
   ({
     tableId,
@@ -187,9 +188,8 @@ const GridBackground = memo(
   }
 );
 
-// [ScheduleTableGrid]
-// 이제 이 컴포넌트는 '배경'을 그리지 않고 GridBackground를 호출만 합니다.
-// 그리고 변하는 '강의(schedules)'만 직접 렌더링합니다.
+
+// '강의 데이터'가 바뀔 때 리렌더링됩니다.
 const ScheduleTableGrid = memo(
   ({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
     const getColor = (lectureId: string): string => {
@@ -199,6 +199,16 @@ const ScheduleTableGrid = memo(
       const colors = ["#fdd", "#ffd", "#dff", "#ddf", "#fdf", "#dfd"];
       return colors[lectures.indexOf(lectureId) % colors.length];
     };
+
+    // [최적화] GridBackground '엘리먼트' 자체를 메모이제이션
+    // 이제 부모가 리렌더링되어도, 아래 의존성 배열의 값이 변하지 않으면
+    // 이 변수는 '이전과 완전히 똑같은 객체'를 반환합니다.
+    const gridBackground = useMemo(() => (
+      <GridBackground
+        tableId={tableId}
+        onScheduleTimeClick={onScheduleTimeClick}
+      />
+    ), [tableId, onScheduleTimeClick]);
 
     return (
       <Grid
@@ -210,13 +220,10 @@ const ScheduleTableGrid = memo(
         outline="1px solid"
         outlineColor="gray.300"
       >
-        {/* 분리된 배경 컴포넌트 사용 */}
-        <GridBackground
-          tableId={tableId}
-          onScheduleTimeClick={onScheduleTimeClick}
-        />
+        {/* 메모이제이션된 엘리먼트 사용 */}
+        {gridBackground}
 
-        {/* 변하는 강의 데이터 */}
+        {/* 변하는 데이터 (강의) */}
         {schedules.map((schedule, index) => {
           if (!schedule.lecture) return null;
 
@@ -304,7 +311,8 @@ const modifiers = [createSnapModifier()];
 
 export const ScheduleTable = memo(
   ({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
-    const { setSchedulesMap } = useScheduleContext();
+    // [유지] Dispatch Hook을 사용하여 상태 변경 로직만 가져옴 (Context 분리 유지)
+    const { setSchedulesMap } = useScheduleDispatch();
 
     const sensors = useSensors(
       useSensor(PointerSensor, {

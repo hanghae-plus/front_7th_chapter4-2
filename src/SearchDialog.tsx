@@ -38,7 +38,7 @@ import {
   Td,
   Flex,
 } from "@chakra-ui/react";
-import { useScheduleContext } from "./ScheduleContext.tsx";
+import {useScheduleDispatch } from "./ScheduleContext.tsx";
 import { Lecture } from "./types.ts";
 import { parseSchedule } from "./utils.ts";
 import axios from "axios";
@@ -376,7 +376,7 @@ const LectureRow = memo(
 );
 
 const SearchDialog = ({ searchInfo, onClose }: Props) => {
-  const { setSchedulesMap } = useScheduleContext();
+  const { setSchedulesMap } = useScheduleDispatch();
 
   const searchInfoRef = useRef(searchInfo);
 
