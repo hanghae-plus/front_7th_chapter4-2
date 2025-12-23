@@ -1,4 +1,4 @@
-import React, { createContext, PropsWithChildren, useContext, useState } from "react";
+import React, {createContext, PropsWithChildren, useContext, useMemo, useState} from "react";
 import { Schedule } from "./types.ts";
 import dummyScheduleMap from "./dummyScheduleMap.ts";
 
@@ -20,8 +20,14 @@ export const useScheduleContext = () => {
 export const ScheduleProvider = ({ children }: PropsWithChildren) => {
   const [schedulesMap, setSchedulesMap] = useState<Record<string, Schedule[]>>(dummyScheduleMap);
 
+  // value 객체를 useMemo로 감싸서 schedulesMap이 변할 때만 새로 생성되도록 함
+  const value = useMemo(() => ({
+    schedulesMap,
+    setSchedulesMap
+  }), [schedulesMap]);
+
   return (
-    <ScheduleContext.Provider value={{ schedulesMap, setSchedulesMap }}>
+    <ScheduleContext.Provider value={value}>
       {children}
     </ScheduleContext.Provider>
   );
