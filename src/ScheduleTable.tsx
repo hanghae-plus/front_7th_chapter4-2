@@ -1,23 +1,16 @@
 import {
   Box,
-  Button,
   Flex,
   Grid,
   GridItem,
-  Popover,
-  PopoverArrow,
-  PopoverBody,
-  PopoverCloseButton,
-  PopoverContent,
-  PopoverTrigger,
   Text,
 } from "@chakra-ui/react";
 import { CellSize, DAY_LABELS, 분 } from "./constants.ts";
 import { Schedule } from "./types.ts";
 import { fill2, parseHnM } from "./utils.ts";
-import { useDndContext, useDraggable } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
-import React, { ComponentProps, Fragment, useCallback } from "react";
+import { useDndContext } from "@dnd-kit/core";
+import React, { Fragment, useCallback, useMemo } from "react";
+import DraggableSchedule from "./DraggableSchedule.tsx";
 
 interface Props {
   tableId: string;
@@ -42,11 +35,15 @@ const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButton
 
   const dndContext = useDndContext();
 
-  const getColor = useCallback((lectureId: string): string => {
+  const colorMap = useMemo(() => {
     const lectures = [...new Set(schedules.map(({ lecture }) => lecture.id))];
     const colors = ["#fdd", "#ffd", "#dff", "#ddf", "#fdf", "#dfd"];
-    return colors[lectures.indexOf(lectureId) % colors.length];
+    return new Map(lectures.map((lectureId, index) => [lectureId, colors[index % colors.length]]));
   }, [schedules]);
+
+  const getColor = useCallback((lectureId: string): string => {
+    return colorMap.get(lectureId) || '#fdd';
+  }, [colorMap]);
 
   const getActiveTableId = () => {
     const activeId = dndContext.active?.id;
@@ -127,54 +124,13 @@ const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButton
   );
 };
 
-const DraggableSchedule = ({
- id,
- data,
- bg,
- onDeleteButtonClick
-}: { id: string; data: Schedule } & ComponentProps<typeof Box> & {
-  onDeleteButtonClick: () => void
-}) => {
-  const { day, range, room, lecture } = data;
-  const { attributes, setNodeRef, listeners, transform } = useDraggable({ id });
-  const leftIndex = DAY_LABELS.indexOf(day as typeof DAY_LABELS[number]);
-  const topIndex = range[0] - 1;
-  const size = range.length;
-
-  return (
-    <Popover>
-      <PopoverTrigger>
-        <Box
-          position="absolute"
-          left={`${120 + (CellSize.WIDTH * leftIndex) + 1}px`}
-          top={`${40 + (topIndex * CellSize.HEIGHT + 1)}px`}
-          width={(CellSize.WIDTH - 1) + "px"}
-          height={(CellSize.HEIGHT * size - 1) + "px"}
-          bg={bg}
-          p={1}
-          boxSizing="border-box"
-          cursor="pointer"
-          ref={setNodeRef}
-          transform={transform ? CSS.Translate.toString(transform) : undefined}
-          {...listeners}
-          {...attributes}
-        >
-          <Text fontSize="sm" fontWeight="bold">{lecture.title}</Text>
-          <Text fontSize="xs">{room}</Text>
-        </Box>
-      </PopoverTrigger>
-      <PopoverContent onClick={event => event.stopPropagation()}>
-        <PopoverArrow/>
-        <PopoverCloseButton/>
-        <PopoverBody>
-          <Text>강의를 삭제하시겠습니까?</Text>
-          <Button colorScheme="red" size="xs" onClick={onDeleteButtonClick}>
-            삭제
-          </Button>
-        </PopoverBody>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-export default React.memo(ScheduleTable);
+export default React.memo(ScheduleTable, (prevProps, nextProps) => {
+  // schedules 배열의 얕은 비교
+  if (prevProps.schedules.length !== nextProps.schedules.length) return false;
+  for (let i = 0; i < prevProps.schedules.length; i++) {
+    if (prevProps.schedules[i] !== nextProps.schedules[i]) return false;
+  }
+  return prevProps.tableId === nextProps.tableId &&
+         prevProps.onScheduleTimeClick === nextProps.onScheduleTimeClick &&
+         prevProps.onDeleteButtonClick === nextProps.onDeleteButtonClick;
+});
