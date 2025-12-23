@@ -1,9 +1,12 @@
 import { Flex } from "@chakra-ui/react";
+import { lazy, Suspense } from "react";
 import { useScheduleContext } from "./ScheduleContext.tsx";
-import SearchDialog from "./SearchDialog.tsx";
 import { useScheduleTables } from "./hooks/useScheduleTables.ts";
 import { useScheduleHandlers } from "./hooks/useScheduleHandlers.ts";
 import { ScheduleTableItem } from "./components/ScheduleTableItem/ScheduleTableItem.tsx";
+
+// SearchDialog를 lazy loading으로 분리하여 초기 번들 크기 감소
+const SearchDialog = lazy(() => import("./SearchDialog.tsx"));
 
 /**
  * 시간표 목록 컴포넌트
@@ -49,7 +52,12 @@ export const ScheduleTables = () => {
           );
         })}
       </Flex>
-      <SearchDialog searchInfo={searchInfo} onClose={handleCloseSearchDialog} />
+      <Suspense fallback={null}>
+        <SearchDialog
+          searchInfo={searchInfo}
+          onClose={handleCloseSearchDialog}
+        />
+      </Suspense>
     </>
   );
 };
