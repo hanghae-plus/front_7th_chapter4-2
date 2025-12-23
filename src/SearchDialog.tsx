@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -87,15 +87,6 @@ const fetchLiberalArts = () =>
   axios.get<Lecture[]>("/schedules-liberal-arts.json");
 
 // TODO: 이 코드를 개선해서 API 호출을 최소화 해보세요 + Promise.all이 현재 잘못 사용되고 있습니다. 같이 개선해주세요.
-// const fetchAllLectures = async () =>
-//   await Promise.all([
-//     (console.log("API Call 1", performance.now()), await fetchMajors()),
-//     (console.log("API Call 2", performance.now()), await fetchLiberalArts()),
-//     (console.log("API Call 3", performance.now()), await fetchMajors()),
-//     (console.log("API Call 4", performance.now()), await fetchLiberalArts()),
-//     (console.log("API Call 5", performance.now()), await fetchMajors()),
-//     (console.log("API Call 6", performance.now()), await fetchLiberalArts()),
-//   ]);
 
 // 1. 캐시 로직을 담은 클로저 함수 정의
 const createCacheFetcher = () => {
@@ -158,7 +149,8 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     majors: [],
   });
 
-  const getFilteredLectures = () => {
+  // 검색 결과 필터링 - lectures나 searchOptions가 변경될 때만 재계산
+  const filteredLectures = useMemo(() => {
     const { query = "", credits, grades, days, times, majors } = searchOptions;
     return lectures
       .filter(
@@ -195,13 +187,27 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
           s.range.some((time) => times.includes(time))
         );
       });
-  };
+  }, [lectures, searchOptions]);
 
-  const filteredLectures = getFilteredLectures();
-  const lastPage = Math.ceil(filteredLectures.length / PAGE_SIZE);
-  const visibleLectures = filteredLectures.slice(0, page * PAGE_SIZE);
-  const allMajors = [...new Set(lectures.map((lecture) => lecture.major))];
+  // 마지막 페이지 계산 - filteredLectures가 변경될 때만 재계산
+  const lastPage = useMemo(
+    () => Math.ceil(filteredLectures.length / PAGE_SIZE),
+    [filteredLectures.length]
+  );
 
+  // 보이는 강의 목록 - filteredLectures나 page가 변경될 때만 재계산
+  const visibleLectures = useMemo(
+    () => filteredLectures.slice(0, page * PAGE_SIZE),
+    [filteredLectures, page]
+  );
+
+  // 모든 전공 목록 - lectures가 변경될 때만 재계산
+  const allMajors = useMemo(
+    () => [...new Set(lectures.map((lecture) => lecture.major))],
+    [lectures]
+  );
+
+  // 검색 옵션 변경
   const changeSearchOption = (
     field: keyof SearchOption,
     value: SearchOption[typeof field]
@@ -211,6 +217,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     loaderWrapperRef.current?.scrollTo(0, 0);
   };
 
+  // 스케쥴 추가
   const addSchedule = (lecture: Lecture) => {
     if (!searchInfo) return;
 
@@ -229,6 +236,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     onClose();
   };
 
+  // 모든 API 호출
   useEffect(() => {
     const start = performance.now();
     console.log("API 호출 시작: ", start);
@@ -240,6 +248,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     });
   }, []);
 
+  // 스크롤 관찰
   useEffect(() => {
     const $loader = loaderRef.current;
     const $loaderWrapper = loaderWrapperRef.current;
@@ -262,6 +271,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     return () => observer.unobserve($loader);
   }, [lastPage]);
 
+  // 검색 정보 변경
   useEffect(() => {
     setSearchOptions((prev) => ({
       ...prev,
