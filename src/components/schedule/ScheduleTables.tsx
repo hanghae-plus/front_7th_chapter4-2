@@ -1,12 +1,15 @@
 import { Button, ButtonGroup, Flex, Heading, Stack } from '@chakra-ui/react';
 import { useCallback, useState } from 'react';
 
-import { useScheduleContext } from '@/contexts/ScheduleContext';
+import { useScheduleContext, useScheduleCommand } from '@/contexts/schedule';
 import ScheduleTable from './ScheduleTable';
 import SearchDialog from '@/components/search/SearchDialog';
 
 export const ScheduleTables = () => {
-  const { schedulesMap, setSchedulesMap } = useScheduleContext();
+  console.log('[ScheduleTables] 렌더링');
+
+  const { schedulesMap } = useScheduleContext();
+  const setSchedulesMap = useScheduleCommand();
   const [searchInfo, setSearchInfo] = useState<{
     tableId: string;
     day?: string;
@@ -15,19 +18,24 @@ export const ScheduleTables = () => {
 
   const disabledRemoveButton = Object.keys(schedulesMap).length === 1;
 
-  const duplicate = (targetId: string) => {
+  const handleDuplicate = useCallback((targetId: string) => {
     setSchedulesMap((prev) => ({
       ...prev,
       [`schedule-${Date.now()}`]: [...prev[targetId]],
     }));
-  };
+  }, [setSchedulesMap]);
 
-  const remove = (targetId: string) => {
+  const handleRemove = useCallback((targetId: string) => {
     setSchedulesMap((prev) => {
-      delete prev[targetId];
-      return { ...prev };
+      const { [targetId]: _removed, ...rest } = prev;
+      void _removed;
+      return rest;
     });
-  };
+  }, [setSchedulesMap]);
+
+  const handleSearchOpen = useCallback((tableId: string) => {
+    setSearchInfo({ tableId });
+  }, []);
 
   const handleScheduleTimeClick = useCallback(
     (tableId: string, timeInfo: { day: string; time: number }) => {
@@ -42,6 +50,20 @@ export const ScheduleTables = () => {
         ...prev,
         [tableId]: prev[tableId].filter(
           (schedule) => schedule.day !== day || !schedule.range.includes(time)
+        ),
+      }));
+    },
+    [setSchedulesMap]
+  );
+
+  const handleScheduleUpdate = useCallback(
+    (tableId: string, index: number, newDay: string, newRange: number[]) => {
+      setSchedulesMap((prev) => ({
+        ...prev,
+        [tableId]: prev[tableId].map((schedule, i) =>
+          i === index
+            ? { ...schedule, day: newDay, range: newRange }
+            : schedule
         ),
       }));
     },
@@ -64,32 +86,32 @@ export const ScheduleTables = () => {
               <ButtonGroup size="sm" isAttached>
                 <Button
                   colorScheme="green"
-                  onClick={() => setSearchInfo({ tableId })}
+                  onClick={() => handleSearchOpen(tableId)}
                 >
                   시간표 추가
                 </Button>
                 <Button
                   colorScheme="green"
                   mx="1px"
-                  onClick={() => duplicate(tableId)}
+                  onClick={() => handleDuplicate(tableId)}
                 >
                   복제
                 </Button>
                 <Button
                   colorScheme="green"
                   isDisabled={disabledRemoveButton}
-                  onClick={() => remove(tableId)}
+                  onClick={() => handleRemove(tableId)}
                 >
                   삭제
                 </Button>
               </ButtonGroup>
             </Flex>
             <ScheduleTable
-              key={`schedule-table-${index}`}
               schedules={schedules}
               tableId={tableId}
               onScheduleTimeClick={handleScheduleTimeClick}
               onDeleteButtonClick={handleDeleteButtonClick}
+              onScheduleUpdate={handleScheduleUpdate}
             />
           </Stack>
         ))}
