@@ -38,6 +38,15 @@ const TIMES = [
     .map(v => `${parseHnM(v)}~${parseHnM(v + 50 * 분)}`),
 ] as const
 
+const DayRow = memo(({ day }: { day: string }) => {
+  return (
+    <GridItem key={day} borderLeft="1px" borderColor="gray.300" bg="gray.100">
+      <Flex justifyContent="center" alignItems="center" h="full">
+        <Text fontWeight="bold">{day}</Text>
+      </Flex>
+    </GridItem>
+  )
+})
 const TimeDayRow = memo(
   ({
     time,
@@ -124,11 +133,7 @@ const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButton
           </Flex>
         </GridItem>
         {DAY_LABELS.map(day => (
-          <GridItem key={day} borderLeft="1px" borderColor="gray.300" bg="gray.100">
-            <Flex justifyContent="center" alignItems="center" h="full">
-              <Text fontWeight="bold">{day}</Text>
-            </Flex>
-          </GridItem>
+          <DayRow key={day} day={day} />
         ))}
         {TIMES.map((time, timeIndex) => (
           <TimeDayRow
