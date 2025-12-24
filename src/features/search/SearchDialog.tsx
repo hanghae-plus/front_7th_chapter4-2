@@ -38,20 +38,19 @@ const SearchDialog = memo(({ searchInfo, onClose }: Props) => {
     [lectures],
   );
 
-  const changeSearchOption = (
-    field: keyof SearchOption,
-    value: SearchOption[typeof field],
-  ) => {
-    console.log('changeSearchOption', field, value);
-    setSearchOptions({ ...searchOptions, [field]: value });
-  };
+  const changeSearchOption = useCallback(
+    (field: keyof SearchOption, value: SearchOption[typeof field]) => {
+      console.log('changeSearchOption', field, value);
+      setSearchOptions({ ...searchOptions, [field]: value });
+    },
+    [],
+  );
 
   const handleSearchQuery = useCallback((query: string) => {
     setSearchOptions((prev) => ({ ...prev, query }));
   }, []);
 
   useEffect(() => {
-    console.log('useEffect');
     const start = performance.now();
     console.log('API 호출 시작: ', start);
     fetchAllLectures().then((results) => {
