@@ -40,9 +40,10 @@ const PAGE_SIZE = 100;
 const queryCache = createQueryCache();
 
 // API 호출 함수
-const fetchMajors = () => axios.get<Lecture[]>('/schedules-majors.json');
+const BASE_URL = import.meta.env.BASE_URL;
+const fetchMajors = () => axios.get<Lecture[]>(`${BASE_URL}schedules-majors.json`);
 const fetchLiberalArts = () =>
-  axios.get<Lecture[]>('/schedules-liberal-arts.json');
+  axios.get<Lecture[]>(`${BASE_URL}schedules-liberal-arts.json`);
 
 // 캐시를 활용한 API 호출 (병렬 실행 + 중복 호출 방지)
 const fetchAllLectures = () =>
