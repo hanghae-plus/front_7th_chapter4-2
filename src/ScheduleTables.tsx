@@ -1,15 +1,12 @@
 import { Button, ButtonGroup, Flex, Heading, Stack } from "@chakra-ui/react";
 import ScheduleTable from "./ScheduleTable.tsx";
-import { ScheduleProvider } from "./ScheduleContext.tsx";
+import { useScheduleContext } from "./ScheduleContext.tsx";
 import SearchDialog from "./SearchDialog.tsx";
 import { useCallback, useState } from "react";
 import ScheduleDndProvider from "./ScheduleDndProvider.tsx";
-import dummyScheduleMap from "./dummyScheduleMap.ts";
-import { Schedule } from "./types.ts";
 
 export const ScheduleTables = () => {
-  const [schedulesMap, setSchedulesMap] =
-    useState<Record<string, Schedule[]>>(dummyScheduleMap);
+  const { schedulesMap, setSchedulesMap } = useScheduleContext();
   const [searchInfo, setSearchInfo] = useState<{
     tableId: string;
     day?: string;
@@ -31,41 +28,6 @@ export const ScheduleTables = () => {
       return { ...prev };
     });
   };
-
-  const handleUpdateSchedule = useCallback(
-    (tableId: string, schedules: Schedule[]) => {
-      setSchedulesMap((prev) => ({
-        ...prev,
-        [tableId]: schedules,
-      }));
-    },
-    []
-  );
-
-  const handleAddSchedule = useCallback(
-    (tableId: string, schedules: Schedule[]) => {
-      setSchedulesMap((prev) => ({
-        ...prev,
-        [tableId]: [...prev[tableId], ...schedules],
-      }));
-    },
-    []
-  );
-
-  const handleScheduleTimeClick = useCallback(
-    ({
-      tableId,
-      day,
-      time,
-    }: {
-      tableId: string;
-      day: string;
-      time: number;
-    }) => {
-      setSearchInfo({ tableId, day, time });
-    },
-    []
-  );
 
   const handleDeleteButtonClick = useCallback(
     ({
@@ -119,29 +81,22 @@ export const ScheduleTables = () => {
                 </Button>
               </ButtonGroup>
             </Flex>
-
-            <ScheduleProvider
-              schedules={schedules}
-              setSchedules={(schedules) =>
-                handleUpdateSchedule(tableId, schedules)
-              }
-            >
-              <ScheduleDndProvider>
-                <ScheduleTable
-                  key={`schedule-table-${index}`}
-                  schedules={schedules}
-                  tableId={tableId}
-                  onScheduleTimeClick={handleScheduleTimeClick}
-                  onDeleteButtonClick={handleDeleteButtonClick}
-                />
-              </ScheduleDndProvider>
-            </ScheduleProvider>
+            <ScheduleDndProvider>
+              <ScheduleTable
+                key={`schedule-table-${index}`}
+                schedules={schedules}
+                tableId={tableId}
+                onScheduleTimeClick={(timeInfo) =>
+                  setSearchInfo({ tableId, ...timeInfo })
+                }
+                onDeleteButtonClick={handleDeleteButtonClick}
+              />
+            </ScheduleDndProvider>
           </Stack>
         ))}
       </Flex>
       <SearchDialog
         searchInfo={searchInfo}
-        onAddSchedule={handleAddSchedule}
         onClose={() => setSearchInfo(null)}
       />
     </>
