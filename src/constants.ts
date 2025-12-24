@@ -5,6 +5,16 @@ export const CellSize = {
   HEIGHT: 30,
 };
 
+// 그리드 레이아웃 상수
+export const GRID_HEADER_HEIGHT = 40;
+export const TIME_COLUMN_WIDTH = 120;
+export const GRID_BORDER_WIDTH = 1;
+
+// 스케줄 색상
+export const SCHEDULE_COLORS = [
+  "#fdd", "#ffd", "#dff", "#ddf", "#fdf", "#dfd"
+] as const;
+
 export const 초 = 1000;
 export const 분 = 60 * 초;
 
