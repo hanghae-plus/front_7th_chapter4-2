@@ -33,6 +33,26 @@ export const ScheduleTables = () => {
     setSearchInfo(null)
   }, [])
 
+  const handleDeleteButtonClick = useCallback(
+    (tableId: string) =>
+      ({ day, time }: { day: string; time: number }) => {
+        setSchedulesMap(prev => ({
+          ...prev,
+          [tableId]: prev[tableId].filter(
+            schedule => schedule.day !== day || !schedule.range.includes(time)
+          ),
+        }))
+      },
+    [setSchedulesMap]
+  )
+
+  const handleScheduleTimeClick = useCallback(
+    (tableId: string) => (timeInfo: { day: string; time: number }) => {
+      setSearchInfo({ tableId, ...timeInfo })
+    },
+    [setSearchInfo]
+  )
+
   return (
     <>
       <Flex w="full" gap={6} p={6} flexWrap="wrap">
@@ -63,15 +83,8 @@ export const ScheduleTables = () => {
                 key={`schedule-table-${index}`}
                 schedules={schedules}
                 tableId={tableId}
-                onScheduleTimeClick={timeInfo => setSearchInfo({ tableId, ...timeInfo })}
-                onDeleteButtonClick={({ day, time }) =>
-                  setSchedulesMap(prev => ({
-                    ...prev,
-                    [tableId]: prev[tableId].filter(
-                      schedule => schedule.day !== day || !schedule.range.includes(time)
-                    ),
-                  }))
-                }
+                onScheduleTimeClick={handleScheduleTimeClick(tableId)}
+                onDeleteButtonClick={handleDeleteButtonClick(tableId)}
               />
             </ScheduleDndProvider>
           </Stack>
