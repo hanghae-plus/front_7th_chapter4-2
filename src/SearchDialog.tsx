@@ -38,7 +38,7 @@ import {
   Td,
   Flex,
 } from "@chakra-ui/react";
-import {useScheduleDispatch } from "./ScheduleContext.tsx";
+import { useScheduleDispatch } from "./ScheduleContext.tsx";
 import { Lecture } from "./types.ts";
 import { parseSchedule } from "./utils.ts";
 import axios from "axios";
@@ -165,7 +165,7 @@ const TimeCheckboxGroup = memo(
     <FormControl>
       <FormLabel>시간</FormLabel>
       <CheckboxGroup
-        colorScheme="green"
+        colorScheme="cyan"
         value={times}
         onChange={(values) => onChange(values.map(Number))}
       >
@@ -216,7 +216,7 @@ const MajorCheckboxGroup = memo(
     <FormControl>
       <FormLabel>전공</FormLabel>
       <CheckboxGroup
-        colorScheme="green"
+        colorScheme="cyan"
         value={majors}
         onChange={(values) => onChange(values as string[])}
       >
@@ -364,7 +364,7 @@ const LectureRow = memo(
         <Td width="80px">
           <Button
             size="sm"
-            colorScheme="green"
+            colorScheme="cyan"
             onClick={() => addSchedule(lecture)}
           >
             추가

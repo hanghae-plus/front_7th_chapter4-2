@@ -1,9 +1,13 @@
 import { Button, ButtonGroup, Flex, Heading, Stack } from "@chakra-ui/react";
 import { ScheduleTable } from "./ScheduleTable.tsx";
-import { useScheduleDispatch, useScheduleIds, useScheduleContext } from "./ScheduleContext.tsx";
+import {
+  useScheduleDispatch,
+  useScheduleIds,
+  useScheduleContext,
+} from "./ScheduleContext.tsx";
 import SearchDialog from "./SearchDialog.tsx";
 import { memo } from "react";
-import { Schedule } from "./types.ts"; 
+import { Schedule } from "./types.ts";
 
 const ScheduleTableStructure = memo(
   ({
@@ -24,8 +28,14 @@ const ScheduleTableStructure = memo(
     onSearch: (id: string) => void;
     onDuplicate: (id: string) => void;
     onRemove: (id: string) => void;
-    onScheduleTimeClick: (id: string, time: { day: string; time: number }) => void;
-    onDeleteButtonClick: (id: string, time: { day: string; time: number }) => void;
+    onScheduleTimeClick: (
+      id: string,
+      time: { day: string; time: number }
+    ) => void;
+    onDeleteButtonClick: (
+      id: string,
+      time: { day: string; time: number }
+    ) => void;
   }) => {
     return (
       <Stack width="600px">
@@ -34,14 +44,18 @@ const ScheduleTableStructure = memo(
             시간표 {index + 1}
           </Heading>
           <ButtonGroup size="sm" isAttached>
-            <Button colorScheme="green" onClick={() => onSearch(tableId)}>
+            <Button colorScheme="cyan" onClick={() => onSearch(tableId)}>
               시간표 추가
             </Button>
-            <Button colorScheme="green" mx="1px" onClick={() => onDuplicate(tableId)}>
+            <Button
+              colorScheme="cyan"
+              mx="1px"
+              onClick={() => onDuplicate(tableId)}
+            >
               복제
             </Button>
             <Button
-              colorScheme="green"
+              colorScheme="cyan"
               isDisabled={disabledRemoveButton}
               onClick={() => onRemove(tableId)}
             >
@@ -60,15 +74,20 @@ const ScheduleTableStructure = memo(
   }
 );
 
-
 const ScheduleTableContainer = memo(
   ({ tableId, index }: { tableId: string; index: number }) => {
     // (1) Context 구독 (여기서 리렌더링 발생)
     const { schedulesMap } = useScheduleContext();
     const schedules = schedulesMap[tableId] || [];
-    
+
     // (2) Actions & Helper Data
-    const { onSearch, onDuplicate, onRemove, onScheduleTimeClick, onDeleteButtonClick } = useScheduleDispatch();
+    const {
+      onSearch,
+      onDuplicate,
+      onRemove,
+      onScheduleTimeClick,
+      onDeleteButtonClick,
+    } = useScheduleDispatch();
     const { tableIds } = useScheduleIds();
     const disabledRemoveButton = tableIds.length === 1;
 
@@ -99,7 +118,7 @@ export const ScheduleTables = () => {
 
   return (
     <>
-      <Flex w="full" gap={6} p={6} flexWrap="wrap">
+      <Flex as="main" w="full" gap={6} p={6} flexWrap="wrap">
         {tableIds.map((tableId, index) => (
           <ScheduleTableContainer
             key={tableId}
@@ -108,10 +127,7 @@ export const ScheduleTables = () => {
           />
         ))}
       </Flex>
-      <SearchDialog
-        searchInfo={searchInfo}
-        onClose={onCloseSearch}
-      />
+      <SearchDialog searchInfo={searchInfo} onClose={onCloseSearch} />
     </>
   );
 };
