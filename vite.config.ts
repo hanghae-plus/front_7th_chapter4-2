@@ -5,6 +5,7 @@ import path from 'path';
 
 export default mergeConfig(
   defineConfig({
+    base: '/front_7th_chapter4-2/',
     plugins: [react()],
     resolve: {
       alias: {
