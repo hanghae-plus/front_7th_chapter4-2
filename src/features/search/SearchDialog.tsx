@@ -40,8 +40,7 @@ const SearchDialog = memo(({ searchInfo, onClose }: Props) => {
 
   const changeSearchOption = useCallback(
     (field: keyof SearchOption, value: SearchOption[typeof field]) => {
-      console.log('changeSearchOption', field, value);
-      setSearchOptions({ ...searchOptions, [field]: value });
+      setSearchOptions((prev) => ({ ...prev, [field]: value }));
     },
     [],
   );
