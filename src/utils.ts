@@ -1,3 +1,5 @@
+import axios, { AxiosResponse } from "axios";
+
 export const fill2 = (n: number) => `0${n}`.substr(-2);
 
 export const parseHnM = (current: number) => {
@@ -27,3 +29,19 @@ export const parseSchedule = (schedule: string) => {
     return { day, range, room };
   });
 };
+
+export const requestWithCache = (() => {
+  const cache = new Map();
+
+  return async function <T>(...args: Parameters<typeof axios.get>) {
+    const key = args[0];
+
+    if (!cache.has(key)) {
+      const response = axios.get<T>(...args);
+
+      cache.set(key, response);
+    }
+
+    return cache.get(key) as AxiosResponse<T>;
+  };
+})();
