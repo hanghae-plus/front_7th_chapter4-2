@@ -110,38 +110,14 @@ const LectureTable = ({
       <Table size="sm">
         <Tbody>
           <Tr h={`${virtualizer.getVirtualItems()[0]?.start ?? 0}px`} />
-          {virtualizer.getVirtualItems().map((virtualItem) => {
-            const lecture = filteredLectures[virtualItem.index];
-            return (
-              <Tr
-                key={`${lecture.id}-${virtualItem.index}`}
-                h={`${ROW_HEIGHT}px`}
-                bg={virtualItem.index % 2 === 1 ? 'gray.50' : 'white'}
-              >
-                <Td width="100px">{lecture.id}</Td>
-                <Td width="50px">{lecture.grade}</Td>
-                <Td width="200px">{lecture.title}</Td>
-                <Td width="50px">{lecture.credits}</Td>
-                <Td
-                  width="150px"
-                  dangerouslySetInnerHTML={{ __html: lecture.major }}
-                />
-                <Td
-                  width="150px"
-                  dangerouslySetInnerHTML={{ __html: lecture.schedule }}
-                />
-                <Td width="80px">
-                  <Button
-                    size="sm"
-                    colorScheme="green"
-                    onClick={() => addSchedule(lecture)}
-                  >
-                    추가
-                  </Button>
-                </Td>
-              </Tr>
-            );
-          })}
+          {virtualizer.getVirtualItems().map((virtualItem) => (
+            <LectureRow
+              key={virtualItem.index}
+              lecture={filteredLectures[virtualItem.index]}
+              index={virtualItem.index}
+              onAdd={addSchedule}
+            />
+          ))}
           <Tr
             h={`${
               virtualizer.getTotalSize() -
@@ -153,3 +129,34 @@ const LectureTable = ({
     </Box>
   );
 };
+
+const LectureRow = memo(
+  ({
+    lecture,
+    index,
+    onAdd,
+  }: {
+    lecture: Lecture;
+    index: number;
+    onAdd: (lecture: Lecture) => void;
+  }) => {
+    return (
+      <Tr h={`${ROW_HEIGHT}px`} bg={index % 2 === 1 ? 'gray.50' : 'white'}>
+        <Td width="100px">{lecture.id}</Td>
+        <Td width="50px">{lecture.grade}</Td>
+        <Td width="200px">{lecture.title}</Td>
+        <Td width="50px">{lecture.credits}</Td>
+        <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.major }} />
+        <Td
+          width="150px"
+          dangerouslySetInnerHTML={{ __html: lecture.schedule }}
+        />
+        <Td width="80px">
+          <Button size="sm" colorScheme="green" onClick={() => onAdd(lecture)}>
+            추가
+          </Button>
+        </Td>
+      </Tr>
+    );
+  },
+);
