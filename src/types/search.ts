@@ -6,3 +6,12 @@ export interface Lecture {
   schedule: string;
   grade: number;
 }
+
+export interface SearchOption {
+  query?: string;
+  grades: number[];
+  days: string[];
+  times: number[];
+  majors: string[];
+  credits?: number;
+}
