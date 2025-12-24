@@ -82,17 +82,56 @@ const TIME_SLOTS = [
 
 const PAGE_SIZE = 100;
 
-const fetchMajors = () => axios.get<Lecture[]>('/schedules-majors.json');
-const fetchLiberalArts = () => axios.get<Lecture[]>('/schedules-liberal-arts.json');
+const fetchMajors = (() => {
+  let cache: Lecture[] | null = null;
+  let pending: Promise<Lecture[]> | null = null;
+  
+  return async () => {
+    if (cache !== null) return cache;
+
+    if (pending !== null) return pending;
+
+    pending = axios.get('/schedules-majors.json')
+      .then(response => {
+        cache = response.data as Lecture[];
+        pending = null;
+        return cache;
+      });
+    
+    return pending;
+  };
+})(); 
+
+const fetchLiberalArts = (() => {
+  let cache: Lecture[] | null = null;
+  let pending: Promise<Lecture[]> | null = null;
+  
+  return async () => {
+    if (cache !== null) {
+      return cache;
+    }
+
+    if (pending !== null) return pending;
+
+    pending = axios.get('/schedules-liberal-arts.json')
+      .then(response => {
+        cache = response.data as Lecture[];
+        pending = null;
+        return cache;
+      });
+      
+    return pending;
+  };
+})();
 
 // TODO: 이 코드를 개선해서 API 호출을 최소화 해보세요 + Promise.all이 현재 잘못 사용되고 있습니다. 같이 개선해주세요.
 const fetchAllLectures = async () => await Promise.all([
-  (console.log('API Call 1', performance.now()), await fetchMajors()),
-  (console.log('API Call 2', performance.now()), await fetchLiberalArts()),
-  (console.log('API Call 3', performance.now()), await fetchMajors()),
-  (console.log('API Call 4', performance.now()), await fetchLiberalArts()),
-  (console.log('API Call 5', performance.now()), await fetchMajors()),
-  (console.log('API Call 6', performance.now()), await fetchLiberalArts()),
+  (console.log('API Call 1', performance.now()),  fetchMajors()),
+  (console.log('API Call 2', performance.now()),  fetchLiberalArts()),
+  (console.log('API Call 3', performance.now()),  fetchMajors()),
+  (console.log('API Call 4', performance.now()),  fetchLiberalArts()),
+  (console.log('API Call 5', performance.now()),  fetchMajors()),
+  (console.log('API Call 6', performance.now()),  fetchLiberalArts()),
 ]);
 
 // TODO: 이 컴포넌트에서 불필요한 연산이 발생하지 않도록 다양한 방식으로 시도해주세요.
@@ -170,12 +209,15 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     const start = performance.now();
     console.log('API 호출 시작: ', start)
     fetchAllLectures().then(results => {
+      console.log('API 호출 결과: ', results)
       const end = performance.now();
       console.log('모든 API 호출 완료 ', end)
       console.log('API 호출에 걸린 시간(ms): ', end - start)
-      setLectures(results.flatMap(result => result.data));
+      setLectures(results.flatMap(result => result));
+      
     })
   }, []);
+
 
   useEffect(() => {
     const $loader = loaderRef.current;
