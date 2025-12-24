@@ -11,7 +11,7 @@ import {
 } from '@chakra-ui/react';
 import { useDndContext, useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { ComponentProps, memo, useCallback } from 'react';
+import { ComponentProps, memo, useCallback, useMemo } from 'react';
 import { CellSize, DAY_LABELS } from '../../constants/index.ts';
 import { Schedule } from '../../types.ts';
 import { ScheduleTableStatic } from './ScheduleTableStatic.tsx';
@@ -23,7 +23,7 @@ interface Props {
   onDeleteButtonClick?: (timeInfo: { day: string; time: number }) => void;
 }
 
-const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
+const ScheduleTable = memo(({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
   const getColor = useCallback(
     (lectureId: string): string => {
       const lectures = [...new Set(schedules.map(({ lecture }) => lecture.id))];
@@ -35,15 +35,22 @@ const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButton
 
   const dndContext = useDndContext();
 
-  const getActiveTableId = () => {
+  const activeTableId = useMemo(() => {
     const activeId = dndContext.active?.id;
     if (activeId) {
       return String(activeId).split(':')[0];
     }
     return null;
-  };
+  }, [dndContext.active?.id]);
 
-  const activeTableId = getActiveTableId();
+  const handleDeleteButtonClick = useCallback(
+    (schedule: Schedule) =>
+      onDeleteButtonClick?.({
+        day: schedule.day,
+        time: schedule.range[0],
+      }),
+    [onDeleteButtonClick],
+  );
 
   return (
     <Box position="relative" outline={activeTableId === tableId ? '5px dashed' : undefined} outlineColor="blue.300">
@@ -55,17 +62,12 @@ const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButton
           id={`${tableId}:${index}`}
           data={schedule}
           bg={getColor(schedule.lecture.id)}
-          onDeleteButtonClick={() =>
-            onDeleteButtonClick?.({
-              day: schedule.day,
-              time: schedule.range[0],
-            })
-          }
+          onDeleteButtonClick={handleDeleteButtonClick}
         />
       ))}
     </Box>
   );
-};
+});
 
 const DraggableSchedule = memo(
   ({
@@ -74,10 +76,10 @@ const DraggableSchedule = memo(
     bg,
     onDeleteButtonClick,
   }: { id: string; data: Schedule } & ComponentProps<typeof Box> & {
-      onDeleteButtonClick: () => void;
+      onDeleteButtonClick: (schedule: Schedule) => void;
     }) => {
     const { day, range, room, lecture } = data;
-    const { attributes, setNodeRef, listeners, transform } = useDraggable({ id });
+    const { attributes, setNodeRef, listeners, transform, isDragging } = useDraggable({ id });
     const leftIndex = DAY_LABELS.indexOf(day as (typeof DAY_LABELS)[number]);
     const topIndex = range[0] - 1;
     const size = range.length;
@@ -106,16 +108,18 @@ const DraggableSchedule = memo(
             <Text fontSize="xs">{room}</Text>
           </Box>
         </PopoverTrigger>
-        <PopoverContent onClick={(event) => event.stopPropagation()}>
-          <PopoverArrow />
-          <PopoverCloseButton />
-          <PopoverBody>
-            <Text>강의를 삭제하시겠습니까?</Text>
-            <Button colorScheme="red" size="xs" onClick={onDeleteButtonClick}>
-              삭제
-            </Button>
-          </PopoverBody>
-        </PopoverContent>
+        {!isDragging && (
+          <PopoverContent onClick={(event) => event.stopPropagation()}>
+            <PopoverArrow />
+            <PopoverCloseButton />
+            <PopoverBody>
+              <Text>강의를 삭제하시겠습니까?</Text>
+              <Button colorScheme="red" size="xs" onClick={() => onDeleteButtonClick(data)}>
+                삭제
+              </Button>
+            </PopoverBody>
+          </PopoverContent>
+        )}
       </Popover>
     );
   },

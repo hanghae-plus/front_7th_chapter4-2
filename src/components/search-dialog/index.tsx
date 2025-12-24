@@ -16,7 +16,8 @@ import {
 } from '@chakra-ui/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchAllLectures } from '../../api/lectures.ts';
-import { useScheduleContext } from '../../ScheduleContext.tsx';
+import { useSetAtom } from 'jotai';
+import { getScheduleAtom } from '../../store/scheduleAtoms';
 import { CREDITS, DAY_LABELS, GRADES, TIME_SLOTS } from '../../constants';
 import { Lecture, SearchOption } from '../../types.ts';
 import { parseSchedule } from '../../utils.ts';
@@ -40,7 +41,7 @@ interface Props {
 const PAGE_SIZE = 100;
 
 const SearchDialog = ({ searchInfo, onClose }: Props) => {
-  const { setSchedulesMap } = useScheduleContext();
+  const setSchedules = useSetAtom(getScheduleAtom(searchInfo?.tableId ?? ''));
 
   const loaderWrapperRef = useRef<HTMLDivElement>(null);
   const loaderRef = useRef<HTMLDivElement>(null);
@@ -106,21 +107,16 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     (lecture: Lecture) => {
       if (!searchInfo) return;
 
-      const { tableId } = searchInfo;
-
       const schedules = parseSchedule(lecture.schedule).map((schedule) => ({
         ...schedule,
         lecture,
       }));
 
-      setSchedulesMap((prev) => ({
-        ...prev,
-        [tableId]: [...prev[tableId], ...schedules],
-      }));
+      setSchedules((prev) => [...prev, ...schedules]);
 
       onClose();
     },
-    [onClose, searchInfo, setSchedulesMap],
+    [onClose, searchInfo, setSchedules],
   );
 
   useEffect(() => {
