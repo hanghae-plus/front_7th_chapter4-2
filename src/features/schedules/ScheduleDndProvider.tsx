@@ -1,11 +1,12 @@
 import {
   DndContext,
+  DragEndEvent,
   Modifier,
   PointerSensor,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import { PropsWithChildren } from 'react';
+import { PropsWithChildren, useCallback } from 'react';
 import { CellSize } from '../../constants.ts';
 import { useScheduleStore } from './store/scheduleStore.ts';
 
@@ -57,15 +58,18 @@ export default function ScheduleDndProvider({ children }: PropsWithChildren) {
   );
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleDragEnd = (event: any) => {
-    const { active, delta } = event;
-    const { x, y } = delta;
-    const [tableId, index] = active.id.split(':');
-    const moveDayIndex = Math.floor(x / 80);
-    const moveTimeIndex = Math.floor(y / 30);
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, delta } = event;
+      const { x, y } = delta;
+      const [tableId, index] = String(active.id).split(':');
+      const moveDayIndex = Math.floor(x / 80);
+      const moveTimeIndex = Math.floor(y / 30);
 
-    moveSchedule(tableId, Number(index), moveDayIndex, moveTimeIndex);
-  };
+      moveSchedule(tableId, Number(index), moveDayIndex, moveTimeIndex);
+    },
+    [moveSchedule],
+  );
 
   return (
     <DndContext
