@@ -17,7 +17,7 @@ import {
 } from '@chakra-ui/react';
 import axios from 'axios';
 
-import { useScheduleCommand } from '@/contexts/ScheduleContext';
+import { useScheduleCommand } from '@/contexts/schedule';
 import { Lecture } from '@/types';
 import { parseSchedule } from '@/lib/utils';
 import { createQueryCache } from '@/lib/queryCache';
