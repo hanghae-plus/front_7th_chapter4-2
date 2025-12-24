@@ -1,27 +1,33 @@
-import React, { createContext, PropsWithChildren, useContext, useState } from "react";
+import { createContext, PropsWithChildren, useContext } from "react";
 import { Schedule } from "./types.ts";
-import dummyScheduleMap from "./dummyScheduleMap.ts";
 
 interface ScheduleContextType {
-  schedulesMap: Record<string, Schedule[]>;
-  setSchedulesMap: React.Dispatch<React.SetStateAction<Record<string, Schedule[]>>>;
+  schedules: Schedule[];
+  setSchedules: (schedules: Schedule[]) => void;
 }
 
-const ScheduleContext = createContext<ScheduleContextType | undefined>(undefined);
+const ScheduleContext = createContext<ScheduleContextType | undefined>(
+  undefined
+);
 
 export const useScheduleContext = () => {
   const context = useContext(ScheduleContext);
   if (context === undefined) {
-    throw new Error('useSchedule must be used within a ScheduleProvider');
+    throw new Error("useSchedule must be used within a ScheduleProvider");
   }
   return context;
 };
 
-export const ScheduleProvider = ({ children }: PropsWithChildren) => {
-  const [schedulesMap, setSchedulesMap] = useState<Record<string, Schedule[]>>(dummyScheduleMap);
-
+export const ScheduleProvider = ({
+  children,
+  schedules,
+  setSchedules,
+}: PropsWithChildren<{
+  schedules: Schedule[];
+  setSchedules: (schedules: Schedule[]) => void;
+}>) => {
   return (
-    <ScheduleContext.Provider value={{ schedulesMap, setSchedulesMap }}>
+    <ScheduleContext.Provider value={{ schedules, setSchedules }}>
       {children}
     </ScheduleContext.Provider>
   );
