@@ -17,6 +17,7 @@
     "@chakra-ui/icons": "2.2.4",
     "@chakra-ui/react": "2.10.9",
     "@dnd-kit/core": "latest",
+    "@dnd-kit/modifiers": "^9.0.0",
     "@dnd-kit/utilities": "latest",
     "@emotion/react": "latest",
     "@emotion/styled": "latest",
