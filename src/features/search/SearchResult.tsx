@@ -1,12 +1,4 @@
-import {
-  memo,
-  RefObject,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   Box,
   Button,
@@ -18,11 +10,12 @@ import {
   Thead,
   Tr,
 } from '@chakra-ui/react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { Lecture, SearchInfo, SearchOption } from '../../types.ts';
 import { filterLectures } from './services/lectureFilterService.ts';
 import { useScheduleStore } from '../schedules/store/scheduleStore.ts';
 
-const PAGE_SIZE = 100;
+const ROW_HEIGHT = 40;
 
 interface Props {
   searchInfo: SearchInfo | null;
@@ -39,16 +32,10 @@ const SearchResult = ({
 }: Props) => {
   const addScheduleToStore = useScheduleStore((state) => state.addSchedule);
 
-  const loaderWrapperRef = useRef<HTMLDivElement>(null);
-  const loaderRef = useRef<HTMLDivElement>(null);
-
-  const [page, setPage] = useState(1);
-
   const filteredLectures = useMemo(
     () => filterLectures(lectures, searchOptions),
     [lectures, searchOptions],
   );
-  const lastPage = Math.ceil(filteredLectures.length / PAGE_SIZE);
 
   const addSchedule = useCallback(
     (lecture: Lecture) => {
@@ -61,33 +48,6 @@ const SearchResult = ({
     [searchInfo, addScheduleToStore, onClose],
   );
 
-  useEffect(() => {
-    const $loader = loaderRef.current;
-    const $loaderWrapper = loaderWrapperRef.current;
-
-    if (!$loader || !$loaderWrapper) {
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setPage((prevPage) => Math.min(lastPage, prevPage + 1));
-        }
-      },
-      { threshold: 0, root: $loaderWrapper },
-    );
-
-    observer.observe($loader);
-
-    return () => observer.unobserve($loader);
-  }, [lastPage]);
-
-  useEffect(() => {
-    setPage(1);
-    loaderWrapperRef.current?.scrollTo(0, 0);
-  }, [searchOptions]);
-
   return (
     <>
       <Text align="right">검색결과: {filteredLectures.length}개</Text>
@@ -95,10 +55,8 @@ const SearchResult = ({
         <TableHead />
         <LectureTable
           filteredLectures={filteredLectures}
-          page={page}
-          loaderWrapperRef={loaderWrapperRef}
-          loaderRef={loaderRef}
           addSchedule={addSchedule}
+          searchOptions={searchOptions}
         />
       </Box>
     </>
@@ -127,54 +85,71 @@ const TableHead = memo(() => {
 
 const LectureTable = ({
   filteredLectures,
-  page,
-  loaderWrapperRef,
-  loaderRef,
   addSchedule,
+  searchOptions,
 }: {
   filteredLectures: Lecture[];
-  page: number;
-  loaderWrapperRef: RefObject<HTMLDivElement | null>;
-  loaderRef: RefObject<HTMLDivElement | null>;
   addSchedule: (lecture: Lecture) => void;
+  searchOptions: SearchOption;
 }) => {
-  const visibleLectures = useMemo(
-    () => filteredLectures.slice(0, page * PAGE_SIZE),
-    [filteredLectures, page],
-  );
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: filteredLectures.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 5,
+  });
+
+  useEffect(() => {
+    virtualizer.scrollToIndex(0);
+  }, [searchOptions, virtualizer]);
 
   return (
-    <Box overflowY="auto" maxH="500px" ref={loaderWrapperRef}>
-      <Table size="sm" variant="striped">
+    <Box ref={parentRef} overflowY="auto" maxH="500px">
+      <Table size="sm">
         <Tbody>
-          {visibleLectures.map((lecture, index) => (
-            <Tr key={`${lecture.id}-${index}`}>
-              <Td width="100px">{lecture.id}</Td>
-              <Td width="50px">{lecture.grade}</Td>
-              <Td width="200px">{lecture.title}</Td>
-              <Td width="50px">{lecture.credits}</Td>
-              <Td
-                width="150px"
-                dangerouslySetInnerHTML={{ __html: lecture.major }}
-              />
-              <Td
-                width="150px"
-                dangerouslySetInnerHTML={{ __html: lecture.schedule }}
-              />
-              <Td width="80px">
-                <Button
-                  size="sm"
-                  colorScheme="green"
-                  onClick={() => addSchedule(lecture)}
-                >
-                  추가
-                </Button>
-              </Td>
-            </Tr>
-          ))}
+          <Tr h={`${virtualizer.getVirtualItems()[0]?.start ?? 0}px`} />
+          {virtualizer.getVirtualItems().map((virtualItem) => {
+            const lecture = filteredLectures[virtualItem.index];
+            return (
+              <Tr
+                key={`${lecture.id}-${virtualItem.index}`}
+                h={`${ROW_HEIGHT}px`}
+                bg={virtualItem.index % 2 === 1 ? 'gray.50' : 'white'}
+              >
+                <Td width="100px">{lecture.id}</Td>
+                <Td width="50px">{lecture.grade}</Td>
+                <Td width="200px">{lecture.title}</Td>
+                <Td width="50px">{lecture.credits}</Td>
+                <Td
+                  width="150px"
+                  dangerouslySetInnerHTML={{ __html: lecture.major }}
+                />
+                <Td
+                  width="150px"
+                  dangerouslySetInnerHTML={{ __html: lecture.schedule }}
+                />
+                <Td width="80px">
+                  <Button
+                    size="sm"
+                    colorScheme="green"
+                    onClick={() => addSchedule(lecture)}
+                  >
+                    추가
+                  </Button>
+                </Td>
+              </Tr>
+            );
+          })}
+          <Tr
+            h={`${
+              virtualizer.getTotalSize() -
+              (virtualizer.getVirtualItems().at(-1)?.end ?? 0)
+            }px`}
+          />
         </Tbody>
       </Table>
-      <Box ref={loaderRef} h="20px" />
     </Box>
   );
 };
