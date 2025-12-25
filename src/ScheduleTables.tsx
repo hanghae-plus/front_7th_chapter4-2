@@ -6,7 +6,6 @@ import { useCallback, useState } from "react";
 import ScheduleDndProvider from "./ScheduleDndProvider.tsx";
 import { Schedule } from "./types.ts";
 import { memo } from "react";
-import { useDndContext } from "@dnd-kit/core";
 
 const ScheduleTableBox = memo(
   ({
@@ -23,16 +22,6 @@ const ScheduleTableBox = memo(
     disabledRemoveButton: boolean;
   }) => {
     const { setSchedulesMap } = useSetScheduleContext();
-
-    const dndContext = useDndContext();
-    const getActiveTableId = () => {
-      const activeId = dndContext.active?.id;
-      if (activeId) {
-        return String(activeId).split(":")[0];
-      }
-      return null;
-    };
-    const activeTableId = getActiveTableId();
 
     const duplicate = (targetId: string) => {
       setSchedulesMap((prev: Record<string, Schedule[]>) => ({
@@ -85,7 +74,6 @@ const ScheduleTableBox = memo(
         <ScheduleDndProvider setSchedulesMap={setSchedulesMap}>
           <ScheduleTable
             key={`schedule-table-${index}`}
-            isActive={activeTableId === tableId}
             schedules={schedules}
             tableId={tableId}
             onScheduleTimeClick={scheduleTimeClick}

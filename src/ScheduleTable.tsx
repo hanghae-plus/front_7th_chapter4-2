@@ -15,14 +15,13 @@ import {
 import { CellSize, DAY_LABELS, 분 } from "./constants.ts";
 import { Schedule } from "./types.ts";
 import { fill2, parseHnM } from "./utils.ts";
-import { useDraggable } from "@dnd-kit/core";
+import { useDndContext, useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { ComponentProps, Fragment } from "react";
 import { memo } from "react";
 import { useDisclosure } from "@chakra-ui/react";
 
 interface Props {
-  isActive: boolean;
   tableId: string;
   schedules: Schedule[];
   onScheduleTimeClick: (timeInfo: { day: string; time: number }) => void;
@@ -41,12 +40,22 @@ const TIMES = [
     .map(v => `${parseHnM(v)}~${parseHnM(v + 50 * 분)}`),
 ] as const;
 
-const ScheduleTable = memo(({ isActive, tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
+const ScheduleTable = memo(({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
   const getColor = (lectureId: string): string => {
     const lectures = [...new Set(schedules.map(({ lecture }) => lecture.id))];
     const colors = ["#fdd", "#ffd", "#dff", "#ddf", "#fdf", "#dfd"];
     return colors[lectures.indexOf(lectureId) % colors.length];
   };
+
+  const dndContext = useDndContext();
+  const getActiveTableId = () => {
+    const activeId = dndContext.active?.id;
+    if (activeId) {
+      return String(activeId).split(":")[0];
+    }
+    return null;
+  };
+  const activeTableId = getActiveTableId();
 
   const TableGrid = memo(
     ({ onScheduleTimeClick }: { onScheduleTimeClick: (timeInfo: { day: string; time: number }) => void }) => {
@@ -100,7 +109,7 @@ const ScheduleTable = memo(({ isActive, tableId, schedules, onScheduleTimeClick,
   );
 
   return (
-    <Box position="relative" outline={isActive ? "5px dashed" : undefined} outlineColor="blue.300">
+    <Box position="relative" outline={activeTableId === tableId ? "5px dashed" : undefined} outlineColor="blue.300">
       <TableGrid onScheduleTimeClick={onScheduleTimeClick} />
 
       {schedules.map((schedule, index) => (
