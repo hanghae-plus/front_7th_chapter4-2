@@ -22,7 +22,8 @@
     "framer-motion": "latest",
     "msw": "latest",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "zustand": "^5.0.9"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.4.5",
