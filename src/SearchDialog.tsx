@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -81,6 +81,40 @@ const TIME_SLOTS = [
 ];
 
 const PAGE_SIZE = 100;
+
+// 전공 체크박스 컴포넌트 - React.memo로 메모이제이션
+const MajorCheckbox = memo(({ major }: { major: string }) => {
+  return (
+    <Box>
+      <Checkbox size="sm" value={major}>
+        {major.replace(/<p>/gi, ' ')}
+      </Checkbox>
+    </Box>
+  );
+});
+
+// 강의 행 컴포넌트 - React.memo로 메모이제이션
+const LectureRow = memo(({
+  lecture,
+  onAddSchedule
+}: {
+  lecture: Lecture;
+  onAddSchedule: (lecture: Lecture) => void;
+}) => {
+  return (
+    <Tr>
+      <Td width="100px">{lecture.id}</Td>
+      <Td width="50px">{lecture.grade}</Td>
+      <Td width="200px">{lecture.title}</Td>
+      <Td width="50px">{lecture.credits}</Td>
+      <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.major }}/>
+      <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.schedule }}/>
+      <Td width="80px">
+        <Button size="sm" colorScheme="green" onClick={() => onAddSchedule(lecture)}>추가</Button>
+      </Td>
+    </Tr>
+  );
+});
 
 // 클로저를 이용한 캐싱 구현
 const createCachedFetch = <T,>(fetcher: () => Promise<T>) => {
@@ -166,7 +200,8 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     loaderWrapperRef.current?.scrollTo(0, 0);
   };
 
-  const addSchedule = (lecture: Lecture) => {
+  // useCallback으로 메모이제이션하여 LectureRow의 불필요한 리렌더링 방지
+  const addSchedule = useCallback((lecture: Lecture) => {
     if (!searchInfo) return;
 
     const { tableId } = searchInfo;
@@ -182,7 +217,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     }));
 
     onClose();
-  };
+  }, [searchInfo, setSchedulesMap, onClose]);
 
   useEffect(() => {
     const start = performance.now();
@@ -337,11 +372,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
                   <Stack spacing={2} overflowY="auto" h="100px" border="1px solid" borderColor="gray.200"
                          borderRadius={5} p={2}>
                     {allMajors.map(major => (
-                      <Box key={major}>
-                        <Checkbox key={major} size="sm" value={major}>
-                          {major.replace(/<p>/gi, ' ')}
-                        </Checkbox>
-                      </Box>
+                      <MajorCheckbox key={major} major={major} />
                     ))}
                   </Stack>
                 </CheckboxGroup>
@@ -369,17 +400,11 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
                 <Table size="sm" variant="striped">
                   <Tbody>
                     {visibleLectures.map((lecture, index) => (
-                      <Tr key={`${lecture.id}-${index}`}>
-                        <Td width="100px">{lecture.id}</Td>
-                        <Td width="50px">{lecture.grade}</Td>
-                        <Td width="200px">{lecture.title}</Td>
-                        <Td width="50px">{lecture.credits}</Td>
-                        <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.major }}/>
-                        <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.schedule }}/>
-                        <Td width="80px">
-                          <Button size="sm" colorScheme="green" onClick={() => addSchedule(lecture)}>추가</Button>
-                        </Td>
-                      </Tr>
+                      <LectureRow
+                        key={`${lecture.id}-${index}`}
+                        lecture={lecture}
+                        onAddSchedule={addSchedule}
+                      />
                     ))}
                   </Tbody>
                 </Table>
