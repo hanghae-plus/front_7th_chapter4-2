@@ -1,6 +1,6 @@
 import { Box } from '@chakra-ui/react';
 import { useDndContext } from '@dnd-kit/core';
-import { memo, useMemo } from 'react';
+import { memo, useDeferredValue, useMemo } from 'react';
 import { SCHEDULE_COLORS } from '../../constants/schedule.ts';
 import { Schedule } from '../../types/schedule.ts';
 import ScheduleGrid from './ScheduleGrid.tsx';
@@ -15,14 +15,15 @@ interface Props {
 
 const ScheduleTable = memo(
   ({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
+    const deferredSchedules = useDeferredValue(schedules);
     const colorsMap = useMemo(() => {
-      const lectures = [...new Set(schedules.map(({ lecture }) => lecture.id))];
+      const lectures = [...new Set(deferredSchedules.map(({ lecture }) => lecture.id))];
       const map = new Map<string, string>();
       lectures.forEach((lectureId, index) => {
         map.set(lectureId, SCHEDULE_COLORS[index % SCHEDULE_COLORS.length]);
       });
       return map;
-    }, [schedules]);
+    }, [deferredSchedules]);
     const getColor = (lectureId: string): string => colorsMap.get(lectureId)!;
     const dndContext = useDndContext();
     const activeTableId = useMemo(() => {
@@ -37,7 +38,7 @@ const ScheduleTable = memo(
         outlineColor="blue.300"
       >
         <ScheduleGrid onScheduleTimeClick={onScheduleTimeClick} />
-        {schedules.map((schedule, index) => (
+        {deferredSchedules.map((schedule, index) => (
           <ScheduleItem
             key={`${schedule.lecture.title}-${index}`}
             id={`${tableId}:${index}`}
