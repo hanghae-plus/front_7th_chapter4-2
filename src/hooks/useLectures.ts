@@ -5,12 +5,10 @@ import { getAllLectures } from '../api';
 interface UseLecturesReturn {
   lectures: Lecture[];
   allMajors: string[];
-  isLoading: boolean;
 }
 
 const useLectures = (): UseLecturesReturn => {
   const [lectures, setLectures] = useState<Lecture[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const start = performance.now();
@@ -21,7 +19,6 @@ const useLectures = (): UseLecturesReturn => {
       console.log('모든 API 호출 완료: ', end);
       console.log('API 호출에 걸린 시간(ms): ', end - start);
       setLectures(allLectures);
-      setIsLoading(false);
     });
   }, []);
 
@@ -30,7 +27,7 @@ const useLectures = (): UseLecturesReturn => {
     [lectures],
   );
 
-  return { lectures, allMajors, isLoading };
+  return { lectures, allMajors };
 };
 
 export default useLectures;

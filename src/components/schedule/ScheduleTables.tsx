@@ -1,11 +1,9 @@
-import { memo, useState, lazy, Suspense, useMemo } from 'react';
-import { Flex, Spinner, Center } from '@chakra-ui/react';
+import { memo, useState, useMemo } from 'react';
+import { Flex } from '@chakra-ui/react';
 import { useSchedulesMap } from '../../context';
 import useAutoCallback from '../../hooks/useAutoCallback';
 import ScheduleTableItem from './ScheduleTableItem';
-
-// SearchDialog lazy loading
-const SearchDialog = lazy(() => import('../searchDialog/SearchDialog'));
+import SearchDialog from '../searchDialog/SearchDialog';
 
 interface SearchInfo {
   tableId: string;
@@ -49,20 +47,7 @@ const ScheduleTables = memo(() => {
         ))}
       </Flex>
       {searchInfo && (
-        <Suspense
-          fallback={
-            <Center
-              position="fixed"
-              inset={0}
-              bg="blackAlpha.500"
-              zIndex={1000}
-            >
-              <Spinner size="xl" color="white" />
-            </Center>
-          }
-        >
-          <SearchDialog searchInfo={searchInfo} onClose={handleCloseDialog} />
-        </Suspense>
+        <SearchDialog searchInfo={searchInfo} onClose={handleCloseDialog} />
       )}
     </>
   );

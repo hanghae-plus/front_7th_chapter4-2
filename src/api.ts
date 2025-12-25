@@ -50,9 +50,8 @@ export async function getAllLectures(): Promise<Lecture[]> {
   ]);
 
   const allLectures = results.flat();
-  const uniqueById = new Map(allLectures.map((l) => [l.id, l]));
 
-  return [...uniqueById.values()];
+  return allLectures;
 }
 
 // 캐시 무효화
