@@ -17,7 +17,7 @@ import { Schedule } from "./types.ts";
 import { fill2, parseHnM } from "./utils.ts";
 import { useDndContext, useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { ComponentProps, Fragment } from "react";
+import { ComponentProps, Fragment, memo, useCallback, useMemo } from "react";
 
 interface Props {
   tableId: string;
@@ -40,23 +40,31 @@ const TIMES = [
 
 const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
 
-  const getColor = (lectureId: string): string => {
+  // 강의별 색상 매핑을 useMemo로 메모이제이션
+  const lectureColors = useMemo(() => {
     const lectures = [...new Set(schedules.map(({ lecture }) => lecture.id))];
     const colors = ["#fdd", "#ffd", "#dff", "#ddf", "#fdf", "#dfd"];
-    return colors[lectures.indexOf(lectureId) % colors.length];
-  };
+    const colorMap = new Map<string, string>();
+    lectures.forEach((lectureId, index) => {
+      colorMap.set(lectureId, colors[index % colors.length]);
+    });
+    return colorMap;
+  }, [schedules]);
+
+  const getColor = useCallback((lectureId: string): string => {
+    return lectureColors.get(lectureId) || "#fff";
+  }, [lectureColors]);
 
   const dndContext = useDndContext();
 
-  const getActiveTableId = () => {
+  // activeTableId를 useMemo로 메모이제이션
+  const activeTableId = useMemo(() => {
     const activeId = dndContext.active?.id;
     if (activeId) {
       return String(activeId).split(":")[0];
     }
     return null;
-  }
-
-  const activeTableId = getActiveTableId();
+  }, [dndContext.active?.id]);
 
   return (
     <Box
@@ -117,29 +125,32 @@ const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButton
           id={`${tableId}:${index}`}
           data={schedule}
           bg={getColor(schedule.lecture.id)}
-          onDeleteButtonClick={() => onDeleteButtonClick?.({
-            day: schedule.day,
-            time: schedule.range[0],
-          })}
+          onDeleteButtonClick={onDeleteButtonClick}
         />
       ))}
     </Box>
   );
 };
 
-const DraggableSchedule = ({
+// React.memo로 메모이제이션하여 드래그 시 불필요한 리렌더링 방지
+const DraggableSchedule = memo(({
  id,
  data,
  bg,
  onDeleteButtonClick
 }: { id: string; data: Schedule } & ComponentProps<typeof Box> & {
-  onDeleteButtonClick: () => void
+  onDeleteButtonClick?: (timeInfo: { day: string, time: number }) => void
 }) => {
   const { day, range, room, lecture } = data;
   const { attributes, setNodeRef, listeners, transform } = useDraggable({ id });
   const leftIndex = DAY_LABELS.indexOf(day as typeof DAY_LABELS[number]);
   const topIndex = range[0] - 1;
   const size = range.length;
+
+  // 삭제 핸들러를 useCallback으로 메모이제이션
+  const handleDelete = useCallback(() => {
+    onDeleteButtonClick?.({ day, time: range[0] });
+  }, [onDeleteButtonClick, day, range]);
 
   return (
     <Popover>
@@ -168,13 +179,13 @@ const DraggableSchedule = ({
         <PopoverCloseButton/>
         <PopoverBody>
           <Text>강의를 삭제하시겠습니까?</Text>
-          <Button colorScheme="red" size="xs" onClick={onDeleteButtonClick}>
+          <Button colorScheme="red" size="xs" onClick={handleDelete}>
             삭제
           </Button>
         </PopoverBody>
       </PopoverContent>
     </Popover>
   );
-}
+});
 
 export default ScheduleTable;
