@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -119,13 +119,16 @@ const fetchAllLectures = (() => {
 // LectureRow: 테이블의 각 행을 렌더링하는 컴포넌트
 interface LectureRowProps {
   lecture: Lecture;
-  index: number;
   onAddSchedule: (lecture: Lecture) => void;
 }
 
-const LectureRow = ({ lecture, index, onAddSchedule }: LectureRowProps) => {
+const LectureRow = React.memo(({ lecture, onAddSchedule }: LectureRowProps) => {
+  const handleAdd = useCallback(() => {
+    onAddSchedule(lecture);
+  }, [lecture, onAddSchedule]);
+
   return (
-    <Tr key={`${lecture.id}-${index}`}>
+    <Tr>
       <Td width="100px">{lecture.id}</Td>
       <Td width="50px">{lecture.grade}</Td>
       <Td width="200px">{lecture.title}</Td>
@@ -133,11 +136,11 @@ const LectureRow = ({ lecture, index, onAddSchedule }: LectureRowProps) => {
       <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.major }}/>
       <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.schedule }}/>
       <Td width="80px">
-        <Button size="sm" colorScheme="green" onClick={() => onAddSchedule(lecture)}>추가</Button>
+        <Button size="sm" colorScheme="green" onClick={handleAdd}>추가</Button>
       </Td>
     </Tr>
   );
-};
+});
 
 // MajorSelector: 전공 선택을 담당하는 컴포넌트
 interface MajorSelectorProps {
@@ -146,21 +149,29 @@ interface MajorSelectorProps {
   onMajorChange: (majors: string[]) => void;
 }
 
-const MajorSelector = ({ majors, selectedMajors, onMajorChange }: MajorSelectorProps) => {
+const MajorSelector = React.memo(({ majors, selectedMajors, onMajorChange }: MajorSelectorProps) => {
+  const handleChange = useCallback((values: (string | number)[]) => {
+    onMajorChange(values as string[]);
+  }, [onMajorChange]);
+
+  const handleRemoveMajor = useCallback((major: string) => {
+    onMajorChange(selectedMajors.filter(v => v !== major));
+  }, [selectedMajors, onMajorChange]);
+
   return (
     <FormControl>
       <FormLabel>전공</FormLabel>
       <CheckboxGroup
         colorScheme="green"
         value={selectedMajors}
-        onChange={(values) => onMajorChange(values as string[])}
+        onChange={handleChange}
       >
         <Wrap spacing={1} mb={2}>
           {selectedMajors.map(major => (
             <Tag key={major} size="sm" variant="outline" colorScheme="blue">
               <TagLabel>{major.split("<p>").pop()}</TagLabel>
               <TagCloseButton
-                onClick={() => onMajorChange(selectedMajors.filter(v => v !== major))}/>
+                onClick={() => handleRemoveMajor(major)}/>
             </Tag>
           ))}
         </Wrap>
@@ -177,7 +188,7 @@ const MajorSelector = ({ majors, selectedMajors, onMajorChange }: MajorSelectorP
       </CheckboxGroup>
     </FormControl>
   );
-};
+});
 
 // LectureTable: 검색 결과 테이블을 담당하는 컴포넌트
 interface LectureTableProps {
@@ -187,7 +198,7 @@ interface LectureTableProps {
   onAddSchedule: (lecture: Lecture) => void;
 }
 
-const LectureTable = ({ lectures, loaderWrapperRef, loaderRef, onAddSchedule }: LectureTableProps) => {
+const LectureTable = React.memo(({ lectures, loaderWrapperRef, loaderRef, onAddSchedule }: LectureTableProps) => {
   return (
     <Box>
       <Table>
@@ -207,11 +218,10 @@ const LectureTable = ({ lectures, loaderWrapperRef, loaderRef, onAddSchedule }: 
       <Box overflowY="auto" maxH="500px" ref={loaderWrapperRef}>
         <Table size="sm" variant="striped">
           <Tbody>
-            {lectures.map((lecture, index) => (
+            {lectures.map((lecture) => (
               <LectureRow
-                key={`${lecture.id}-${index}`}
+                key={lecture.id}
                 lecture={lecture}
-                index={index}
                 onAddSchedule={onAddSchedule}
               />
             ))}
@@ -221,7 +231,7 @@ const LectureTable = ({ lectures, loaderWrapperRef, loaderRef, onAddSchedule }: 
       </Box>
     </Box>
   );
-};
+});
 
 // SearchForm: 검색 옵션 폼을 담당하는 컴포넌트
 interface SearchFormProps {
@@ -230,7 +240,11 @@ interface SearchFormProps {
   onSearchOptionChange: (field: keyof SearchOption, value: SearchOption[keyof SearchOption]) => void;
 }
 
-const SearchForm = ({ searchOptions, allMajors, onSearchOptionChange }: SearchFormProps) => {
+const SearchForm = React.memo(({ searchOptions, allMajors, onSearchOptionChange }: SearchFormProps) => {
+  const handleMajorChange = useCallback((majors: string[]) => {
+    onSearchOptionChange('majors', majors);
+  }, [onSearchOptionChange]);
+
   return (
     <>
       <HStack spacing={4}>
@@ -320,12 +334,12 @@ const SearchForm = ({ searchOptions, allMajors, onSearchOptionChange }: SearchFo
         <MajorSelector
           majors={allMajors}
           selectedMajors={searchOptions.majors}
-          onMajorChange={(majors) => onSearchOptionChange('majors', majors)}
+          onMajorChange={handleMajorChange}
         />
       </HStack>
     </>
   );
-};
+});
 
 // TODO: 이 컴포넌트에서 불필요한 연산이 발생하지 않도록 다양한 방식으로 시도해주세요.
 const SearchDialog = ({ searchInfo, onClose }: Props) => {
@@ -379,13 +393,13 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
   // lectures가 변경될 때만 계산
   const allMajors = useMemo(() => [...new Set(lectures.map(lecture => lecture.major))], [lectures]);
 
-  const changeSearchOption = (field: keyof SearchOption, value: SearchOption[typeof field]) => {
+  const changeSearchOption = useCallback((field: keyof SearchOption, value: SearchOption[typeof field]) => {
     setPage(1);
     setSearchOptions(prev => ({ ...prev, [field]: value }));
     loaderWrapperRef.current?.scrollTo(0, 0);
-  };
+  }, []);
 
-  const addSchedule = (lecture: Lecture) => {
+  const addSchedule = useCallback((lecture: Lecture) => {
     if (!searchInfo) return;
 
     const { tableId } = searchInfo;
@@ -401,7 +415,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     }));
 
     onClose();
-  };
+  }, [searchInfo, setSchedulesMap, onClose]);
 
   useEffect(() => {
     const start = performance.now();
