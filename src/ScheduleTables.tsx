@@ -71,7 +71,7 @@ const ScheduleTableBox = memo(
             </Button>
           </ButtonGroup>
         </Flex>
-        <ScheduleDndProvider setSchedulesMap={setSchedulesMap}>
+        <ScheduleDndProvider>
           <ScheduleTable
             key={`schedule-table-${index}`}
             schedules={schedules}
