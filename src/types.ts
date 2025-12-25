@@ -3,7 +3,7 @@ export interface Lecture {
   title: string;
   credits: string;
   major: string;
-  schedule: string;
+  schedule: string | null;
   grade: number;
 }
 

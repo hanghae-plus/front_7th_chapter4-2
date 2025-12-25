@@ -1,16 +1,21 @@
 import { ChakraProvider } from "@chakra-ui/react";
-import { ScheduleProvider } from "./ScheduleContext.tsx";
-import { ScheduleTables } from "./ScheduleTables.tsx";
-import ScheduleDndProvider from "./ScheduleDndProvider.tsx";
+import { ScheduleProvider } from "./contexts/ScheduleContext.tsx";
+import { SearchDialogProvider } from "./contexts/SearchDialogContext.tsx";
+import { ScheduleTables } from "./components/schedule/ScheduleTables.tsx";
+import SearchDialog from "./components/search/SearchDialog.tsx";
+import ScheduleDndProvider from "./providers/ScheduleDndProvider.tsx";
 
 function App() {
 
   return (
     <ChakraProvider>
       <ScheduleProvider>
-        <ScheduleDndProvider>
-          <ScheduleTables/>
-        </ScheduleDndProvider>
+        <SearchDialogProvider>
+          <ScheduleDndProvider>
+            <ScheduleTables/>
+            <SearchDialog />
+          </ScheduleDndProvider>
+        </SearchDialogProvider>
       </ScheduleProvider>
     </ChakraProvider>
   );
