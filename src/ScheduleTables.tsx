@@ -1,8 +1,8 @@
 import { Button, ButtonGroup, Flex, Heading, Stack } from "@chakra-ui/react";
 import ScheduleTable from "./ScheduleTable.tsx";
 import { useScheduleContext } from "./ScheduleContext.tsx";
-import SearchDialog from "./SearchDialog.tsx";
-import { useState } from "react";
+import SearchDialog from "./components/SearchDialog/index.tsx";
+import { useCallback, useState } from "react";
 import ScheduleDndProvider from "./ScheduleDndProvider.tsx";
 
 export const ScheduleTables = () => {
@@ -28,6 +28,8 @@ export const ScheduleTables = () => {
       return { ...prev };
     })
   };
+
+  const closeSearchDialog = useCallback(() => setSearchInfo(null), [setSearchInfo])
 
   return (
     <>
@@ -86,7 +88,7 @@ export const ScheduleTables = () => {
       {searchInfo && (
         <SearchDialog
           searchInfo={searchInfo}
-          onClose={() => setSearchInfo(null)}
+          onClose={closeSearchDialog}
         />
       )}
     </>
