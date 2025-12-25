@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { useAutoCallback } from '../useAutoCallback';
 import {
   Box,
   Button,
@@ -90,9 +91,6 @@ export const SearchResults = memo(({ lectures }: SearchResultsProps) => {
   const loaderRef = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState(1);
 
-  // DEBUG: searchOptions 변경 확인
-  console.log('SearchResults render - searchOptions:', searchOptions);
-
   const filteredLectures = useMemo(
     () => getFilteredLectures(lectures, searchOptions),
     [lectures, searchOptions]
@@ -101,7 +99,7 @@ export const SearchResults = memo(({ lectures }: SearchResultsProps) => {
   const lastPage = Math.ceil(filteredLectures.length / PAGE_SIZE);
   const visibleLectures = filteredLectures.slice(0, page * PAGE_SIZE);
 
-  const addSchedule = (lecture: Lecture) => {
+  const addSchedule = useAutoCallback((lecture: Lecture) => {
     if (!searchInfo) return;
 
     const { tableId } = searchInfo;
@@ -117,7 +115,7 @@ export const SearchResults = memo(({ lectures }: SearchResultsProps) => {
     }));
 
     setSearchInfo(null);
-  };
+  });
 
   // searchOptions 변경 시 페이지 초기화 및 스크롤 초기화
   useEffect(() => {
@@ -184,5 +182,3 @@ export const SearchResults = memo(({ lectures }: SearchResultsProps) => {
     </>
   );
 });
-
-// TODO: ROW도 렌더링됨 큰 덩어리만 렌더링되어야함
