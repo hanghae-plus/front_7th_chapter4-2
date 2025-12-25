@@ -17,7 +17,7 @@ import { Schedule } from "./types.ts";
 import { fill2, parseHnM } from "./utils.ts";
 import { useDndContext, useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { ComponentProps, Fragment } from "react";
+import { ComponentProps, Fragment, memo, useCallback, useMemo } from "react";
 
 interface Props {
   tableId: string;
@@ -38,31 +38,52 @@ const TIMES = [
     .map((v) => `${parseHnM(v)}~${parseHnM(v + 50 * 분)}`),
 ] as const;
 
-const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
-
-  const getColor = (lectureId: string): string => {
-    const lectures = [...new Set(schedules.map(({ lecture }) => lecture.id))];
-    const colors = ["#fdd", "#ffd", "#dff", "#ddf", "#fdf", "#dfd"];
-    return colors[lectures.indexOf(lectureId) % colors.length];
-  };
+// DnD Context를 구독하는 래퍼 컴포넌트 (드래그 시 이 컴포넌트만 리렌더링)
+const ScheduleTableWrapper = memo(({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
+  console.log(`[ScheduleTableWrapper ${tableId}] 렌더링`);
 
   const dndContext = useDndContext();
 
-  const getActiveTableId = () => {
+  // 활성 테이블 ID 계산
+  const activeTableId = useMemo(() => {
     const activeId = dndContext.active?.id;
     if (activeId) {
       return String(activeId).split(":")[0];
     }
     return null;
-  }
+  }, [dndContext.active?.id]);
 
-  const activeTableId = getActiveTableId();
+  const isActive = activeTableId === tableId;
 
   return (
     <Box
       position="relative"
-      outline={activeTableId === tableId ? "5px dashed" : undefined}
+      outline={isActive ? "5px dashed" : undefined}
       outlineColor="blue.300"
+    >
+      <ScheduleTable
+        tableId={tableId}
+        schedules={schedules}
+        onScheduleTimeClick={onScheduleTimeClick}
+        onDeleteButtonClick={onDeleteButtonClick}
+      />
+    </Box>
+  );
+});
+
+const ScheduleTable = memo(({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
+  console.log(`[ScheduleTable ${tableId}] 렌더링`);
+
+  // 강의 색상 반환 함수 (메모이제이션)
+  const getColor = useCallback((lectureId: string): string => {
+    const lectures = [...new Set(schedules.map(({ lecture }) => lecture.id))];
+    const colors = ["#fdd", "#ffd", "#dff", "#ddf", "#fdf", "#dfd"];
+    return colors[lectures.indexOf(lectureId) % colors.length];
+  }, [schedules]);
+
+  return (
+    <Box
+      position="relative"
     >
       <Grid
         templateColumns={`120px repeat(${DAY_LABELS.length}, ${CellSize.WIDTH}px)`}
@@ -125,9 +146,9 @@ const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButton
       ))}
     </Box>
   );
-};
+});
 
-const DraggableSchedule = ({
+const DraggableSchedule = memo(({
  id,
  data,
  bg,
@@ -135,6 +156,8 @@ const DraggableSchedule = ({
 }: { id: string; data: Schedule } & ComponentProps<typeof Box> & {
   onDeleteButtonClick: () => void
 }) => {
+  console.log(`[DraggableSchedule ${id}] 렌더링`);
+
   const { day, range, room, lecture } = data;
   const { attributes, setNodeRef, listeners, transform } = useDraggable({ id });
   const leftIndex = DAY_LABELS.indexOf(day as typeof DAY_LABELS[number]);
@@ -175,6 +198,6 @@ const DraggableSchedule = ({
       </PopoverContent>
     </Popover>
   );
-}
+});
 
-export default ScheduleTable;
+export default ScheduleTableWrapper;
