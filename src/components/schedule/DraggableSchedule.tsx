@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import {
   Box,
   Button,
@@ -9,6 +9,7 @@ import {
   PopoverContent,
   PopoverTrigger,
   Text,
+  useDisclosure,
 } from '@chakra-ui/react';
 import { DraggableAttributes, useDraggable } from '@dnd-kit/core';
 import { SyntheticListenerMap } from '@dnd-kit/core/dist/hooks/utilities';
@@ -95,23 +96,15 @@ const ScheduleBox = memo(
 
 const DraggableSchedule = memo(
   ({ id, schedule, bg, day, time, onDelete }: DraggableScheduleProps) => {
-    const [isOpen, setIsOpen] = useState(false);
+    const { isOpen, onOpen, onClose } = useDisclosure();
     const { range, room, lecture } = schedule;
     const { attributes, setNodeRef, listeners, transform } = useDraggable({
       id,
     });
 
-    const handleOpen = useAutoCallback(() => {
-      setIsOpen(true);
-    });
-
-    const handleClose = useAutoCallback(() => {
-      setIsOpen(false);
-    });
-
     const handleDelete = useAutoCallback(() => {
       onDelete(day, time);
-      setIsOpen(false);
+      onClose();
     });
 
     const leftIndex = DAY_LABELS.indexOf(day as (typeof DAY_LABELS)[number]);
@@ -138,10 +131,10 @@ const DraggableSchedule = memo(
           transform={CSS.Translate.toString(transform)}
           listeners={listeners}
           attributes={attributes}
-          onClick={handleOpen}
+          onClick={onOpen}
         />
         {isOpen && (
-          <Popover isOpen onClose={handleClose} closeOnBlur>
+          <Popover isOpen onClose={onClose} closeOnBlur>
             <PopoverTrigger>
               <Box
                 position="absolute"

@@ -24,9 +24,11 @@ const ScheduleTables = memo(() => {
   const [searchInfo, setSearchInfo] = useState<SearchInfo | null>(null);
 
   // 안정적인 콜백 - tableId를 인자로 받음 (인라인 함수 제거)
-  const handleOpenSearch = useAutoCallback((tableId: string, day?: string, time?: number) => {
-    setSearchInfo({ tableId, day, time });
-  });
+  const handleOpenSearch = useAutoCallback(
+    (tableId: string, day?: string, time?: number) => {
+      setSearchInfo({ tableId, day, time });
+    },
+  );
 
   const handleCloseDialog = useAutoCallback(() => {
     setSearchInfo(null);
@@ -49,7 +51,12 @@ const ScheduleTables = memo(() => {
       {searchInfo && (
         <Suspense
           fallback={
-            <Center position="fixed" inset={0} bg="blackAlpha.500" zIndex={1000}>
+            <Center
+              position="fixed"
+              inset={0}
+              bg="blackAlpha.500"
+              zIndex={1000}
+            >
               <Spinner size="xl" color="white" />
             </Center>
           }
