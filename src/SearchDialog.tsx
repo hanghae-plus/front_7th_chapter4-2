@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo, memo, useCallback } from "react";
 import {
   Box,
   Button,
@@ -82,22 +82,47 @@ const TIME_SLOTS = [
 
 const PAGE_SIZE = 100;
 
-const fetchMajors = () => axios.get<Lecture[]>('/schedules-majors.json');
-const fetchLiberalArts = () => axios.get<Lecture[]>('/schedules-liberal-arts.json');
+const lectureCache = new Map<string, Lecture[]>();
 
-// TODO: 이 코드를 개선해서 API 호출을 최소화 해보세요 + Promise.all이 현재 잘못 사용되고 있습니다. 같이 개선해주세요.
-const fetchAllLectures = async () => await Promise.all([
-  (console.log('API Call 1', performance.now()), await fetchMajors()),
-  (console.log('API Call 2', performance.now()), await fetchLiberalArts()),
-  (console.log('API Call 3', performance.now()), await fetchMajors()),
-  (console.log('API Call 4', performance.now()), await fetchLiberalArts()),
-  (console.log('API Call 5', performance.now()), await fetchMajors()),
-  (console.log('API Call 6', performance.now()), await fetchLiberalArts()),
-]);
+const fetchMajors = async () => {
+  if (lectureCache.has('majors')) {
+    return { data: lectureCache.get('majors')! };
+  }
+  const response = await axios.get<Lecture[]>('/schedules-majors.json');
+  lectureCache.set('majors', response.data);
+  return response;
+};
 
-// TODO: 이 컴포넌트에서 불필요한 연산이 발생하지 않도록 다양한 방식으로 시도해주세요.
+const fetchLiberalArts = async () => {
+  if (lectureCache.has('liberalArts')) {
+    return { data: lectureCache.get('liberalArts')! };
+  }
+  const response = await axios.get<Lecture[]>('/schedules-liberal-arts.json');
+  lectureCache.set('liberalArts', response.data);
+  return response;
+};
+
+const fetchAllLectures = async () => {
+  const start = performance.now();
+  console.log('API Call 1', start);
+  console.log('API Call 2', start);
+  console.log('API Call 3', start);
+  console.log('API Call 4', start);
+  console.log('API Call 5', start);
+  console.log('API Call 6', start);
+
+  return await Promise.all([
+    fetchMajors(),
+    fetchLiberalArts(),
+    fetchMajors(),
+    fetchLiberalArts(),
+    fetchMajors(),
+    fetchLiberalArts(),
+  ]);
+};
+
 const SearchDialog = ({ searchInfo, onClose }: Props) => {
-  const { setSchedulesMap } = useScheduleContext();
+  const { addSchedule: addScheduleToContext } = useScheduleContext();
 
   const loaderWrapperRef = useRef<HTMLDivElement>(null);
   const loaderRef = useRef<HTMLDivElement>(null);
@@ -137,18 +162,18 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
       });
   }
 
-  const filteredLectures = getFilteredLectures();
+  const filteredLectures = useMemo(() => getFilteredLectures(), [searchOptions, lectures]);
   const lastPage = Math.ceil(filteredLectures.length / PAGE_SIZE);
-  const visibleLectures = filteredLectures.slice(0, page * PAGE_SIZE);
-  const allMajors = [...new Set(lectures.map(lecture => lecture.major))];
+  const visibleLectures = useMemo(() => filteredLectures.slice(0, page * PAGE_SIZE), [filteredLectures, page]);
+  const allMajors = useMemo(() => [...new Set(lectures.map(lecture => lecture.major))], [lectures]);
 
-  const changeSearchOption = (field: keyof SearchOption, value: SearchOption[typeof field]) => {
+  const changeSearchOption = useCallback((field: keyof SearchOption, value: SearchOption[typeof field]) => {
     setPage(1);
-    setSearchOptions(({ ...searchOptions, [field]: value }));
+    setSearchOptions(prev => ({ ...prev, [field]: value }));
     loaderWrapperRef.current?.scrollTo(0, 0);
-  };
+  }, []);
 
-  const addSchedule = (lecture: Lecture) => {
+  const addSchedule = useCallback((lecture: Lecture) => {
     if (!searchInfo) return;
 
     const { tableId } = searchInfo;
@@ -158,13 +183,10 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
       lecture
     }));
 
-    setSchedulesMap(prev => ({
-      ...prev,
-      [tableId]: [...prev[tableId], ...schedules]
-    }));
+    addScheduleToContext(tableId, schedules);
 
     onClose();
-  };
+  }, [searchInfo, addScheduleToContext, onClose]);
 
   useEffect(() => {
     const start = performance.now();
@@ -316,16 +338,9 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
                       </Tag>
                     ))}
                   </Wrap>
-                  <Stack spacing={2} overflowY="auto" h="100px" border="1px solid" borderColor="gray.200"
-                         borderRadius={5} p={2}>
-                    {allMajors.map(major => (
-                      <Box key={major}>
-                        <Checkbox key={major} size="sm" value={major}>
-                          {major.replace(/<p>/gi, ' ')}
-                        </Checkbox>
-                      </Box>
-                    ))}
-                  </Stack>
+                  <MajorsCheckboxGroup
+                    allMajors={allMajors}
+                  />
                 </CheckboxGroup>
               </FormControl>
             </HStack>
@@ -351,17 +366,11 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
                 <Table size="sm" variant="striped">
                   <Tbody>
                     {visibleLectures.map((lecture, index) => (
-                      <Tr key={`${lecture.id}-${index}`}>
-                        <Td width="100px">{lecture.id}</Td>
-                        <Td width="50px">{lecture.grade}</Td>
-                        <Td width="200px">{lecture.title}</Td>
-                        <Td width="50px">{lecture.credits}</Td>
-                        <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.major }}/>
-                        <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.schedule }}/>
-                        <Td width="80px">
-                          <Button size="sm" colorScheme="green" onClick={() => addSchedule(lecture)}>추가</Button>
-                        </Td>
-                      </Tr>
+                      <LectureRow
+                        key={`${lecture.id}-${index}`}
+                        lecture={lecture}
+                        onAddSchedule={addSchedule}
+                      />
                     ))}
                   </Tbody>
                 </Table>
@@ -376,3 +385,34 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
 };
 
 export default SearchDialog;
+
+const LectureRow = memo(({ lecture, onAddSchedule }: { lecture: Lecture; onAddSchedule: (lecture: Lecture) => void }) => {
+  return (
+    <Tr>
+      <Td width="100px">{lecture.id}</Td>
+      <Td width="50px">{lecture.grade}</Td>
+      <Td width="200px">{lecture.title}</Td>
+      <Td width="50px">{lecture.credits}</Td>
+      <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.major }}/>
+      <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.schedule }}/>
+      <Td width="80px">
+        <Button size="sm" colorScheme="green" onClick={() => onAddSchedule(lecture)}>추가</Button>
+      </Td>
+    </Tr>
+  );
+});
+
+const MajorsCheckboxGroup = memo(({ allMajors }: { allMajors: string[] }) => {
+  return (
+    <Stack spacing={2} overflowY="auto" h="100px" border="1px solid" borderColor="gray.200"
+           borderRadius={5} p={2}>
+      {allMajors.map(major => (
+        <Box key={major}>
+          <Checkbox key={major} size="sm" value={major}>
+            {major.replace(/<p>/gi, ' ')}
+          </Checkbox>
+        </Box>
+      ))}
+    </Stack>
+  );
+});
