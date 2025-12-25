@@ -160,36 +160,78 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     majors: [],
   });
 
-  // useMemo로 필터링 결과 메모이제이션
-  const filteredLectures = useMemo(() => {
-    const { query = '', credits, grades, days, times, majors } = searchOptions;
-    return lectures
-      .filter(lecture =>
-        lecture.title.toLowerCase().includes(query.toLowerCase()) ||
-        lecture.id.toLowerCase().includes(query.toLowerCase())
-      )
-      .filter(lecture => grades.length === 0 || grades.includes(lecture.grade))
-      .filter(lecture => majors.length === 0 || majors.includes(lecture.major))
-      .filter(lecture => !credits || lecture.credits.startsWith(String(credits)))
-      .filter(lecture => {
-        if (days.length === 0) {
-          return true;
+  // Generator를 활용한 지연 평가: 필요한 만큼만 필터링
+  const createFilteredLecturesGenerator = useMemo(() => {
+    return function* () {
+      const { query = '', credits, grades, days, times, majors } = searchOptions;
+
+      for (const lecture of lectures) {
+        // 쿼리 필터
+        if (query) {
+          const lowerQuery = query.toLowerCase();
+          if (!lecture.title.toLowerCase().includes(lowerQuery) &&
+              !lecture.id.toLowerCase().includes(lowerQuery)) {
+            continue;
+          }
         }
-        const schedules = lecture.schedule ? parseSchedule(lecture.schedule) : [];
-        return schedules.some(s => days.includes(s.day));
-      })
-      .filter(lecture => {
-        if (times.length === 0) {
-          return true;
+
+        // 학년 필터
+        if (grades.length > 0 && !grades.includes(lecture.grade)) {
+          continue;
         }
-        const schedules = lecture.schedule ? parseSchedule(lecture.schedule) : [];
-        return schedules.some(s => s.range.some(time => times.includes(time)));
-      });
+
+        // 전공 필터
+        if (majors.length > 0 && !majors.includes(lecture.major)) {
+          continue;
+        }
+
+        // 학점 필터
+        if (credits && !lecture.credits.startsWith(String(credits))) {
+          continue;
+        }
+
+        // 요일 필터
+        if (days.length > 0) {
+          const schedules = lecture.schedule ? parseSchedule(lecture.schedule) : [];
+          if (!schedules.some(s => days.includes(s.day))) {
+            continue;
+          }
+        }
+
+        // 시간 필터
+        if (times.length > 0) {
+          const schedules = lecture.schedule ? parseSchedule(lecture.schedule) : [];
+          if (!schedules.some(s => s.range.some(time => times.includes(time)))) {
+            continue;
+          }
+        }
+
+        yield lecture;
+      }
+    };
   }, [lectures, searchOptions]);
 
+  // 실제로 필요한 만큼만 가져오기 (page * PAGE_SIZE개)
+  const { visibleLectures, totalCount } = useMemo(() => {
+    const generator = createFilteredLecturesGenerator();
+    const visible: Lecture[] = [];
+    const needed = page * PAGE_SIZE;
+    let count = 0;
+
+    for (const lecture of generator) {
+      count++;
+      if (visible.length < needed) {
+        visible.push(lecture);
+      }
+      // 더 이상 렌더링에 필요하지 않지만 totalCount를 위해 계속 카운트
+      // 최적화: 일정 개수 이상이면 "n개 이상" 처리 가능
+    }
+
+    return { visibleLectures: visible, totalCount: count };
+  }, [createFilteredLecturesGenerator, page]);
+
   // 페이지 관련 값들도 메모이제이션
-  const lastPage = useMemo(() => Math.ceil(filteredLectures.length / PAGE_SIZE), [filteredLectures.length]);
-  const visibleLectures = useMemo(() => filteredLectures.slice(0, page * PAGE_SIZE), [filteredLectures, page]);
+  const lastPage = useMemo(() => Math.ceil(totalCount / PAGE_SIZE), [totalCount]);
 
   // 전공 목록 메모이제이션
   const allMajors = useMemo(() => [...new Set(lectures.map(lecture => lecture.major))], [lectures]);
@@ -379,7 +421,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
               </FormControl>
             </HStack>
             <Text align="right">
-              검색결과: {filteredLectures.length}개
+              검색결과: {totalCount}개
             </Text>
             <Box>
               <Table>
