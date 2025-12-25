@@ -17,7 +17,7 @@ import { Schedule } from "./types.ts";
 import { fill2, parseHnM } from "./utils.ts";
 import { useDndContext, useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { ComponentProps, Fragment } from "react";
+import { ComponentProps, Fragment, memo, useMemo } from "react";
 
 interface Props {
   tableId: string;
@@ -39,24 +39,30 @@ const TIMES = [
 ] as const;
 
 const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
-
-  const getColor = (lectureId: string): string => {
-    const lectures = [...new Set(schedules.map(({ lecture }) => lecture.id))];
-    const colors = ["#fdd", "#ffd", "#dff", "#ddf", "#fdf", "#dfd"];
-    return colors[lectures.indexOf(lectureId) % colors.length];
-  };
-
   const dndContext = useDndContext();
 
-  const getActiveTableId = () => {
+  // 강의 ID에 따른 색상 매핑을 메모이제이션
+  const colorMap = useMemo(() => {
+    const lectures = [...new Set(schedules.map(({ lecture }) => lecture.id))];
+    const colors = ["#fdd", "#ffd", "#dff", "#ddf", "#fdf", "#dfd"];
+    const map: Record<string, string> = {};
+    lectures.forEach((lectureId, index) => {
+      map[lectureId] = colors[index % colors.length];
+    });
+    return map;
+  }, [schedules]);
+
+  const getColor = (lectureId: string): string => {
+    return colorMap[lectureId];
+  };
+
+  const activeTableId = useMemo(() => {
     const activeId = dndContext.active?.id;
     if (activeId) {
       return String(activeId).split(":")[0];
     }
     return null;
-  }
-
-  const activeTableId = getActiveTableId();
+  }, [dndContext.active?.id]);
 
   return (
     <Box
@@ -127,7 +133,7 @@ const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButton
   );
 };
 
-const DraggableSchedule = ({
+const DraggableSchedule = memo(({
  id,
  data,
  bg,
@@ -175,6 +181,6 @@ const DraggableSchedule = ({
       </PopoverContent>
     </Popover>
   );
-}
+});
 
 export default ScheduleTable;
