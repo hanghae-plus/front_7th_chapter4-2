@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -32,7 +32,7 @@ import {
 import { useScheduleContext } from "./ScheduleContext.tsx";
 import { Lecture } from "./types.ts";
 import { parseSchedule } from "./utils.ts";
-import axios from "axios";
+import axios, { AxiosResponse } from "axios";
 import { DAY_LABELS } from "./constants.ts";
 
 interface Props {
@@ -82,22 +82,84 @@ const TIME_SLOTS = [
 
 const PAGE_SIZE = 100;
 
-const fetchMajors = () => axios.get<Lecture[]>('/schedules-majors.json');
-const fetchLiberalArts = () => axios.get<Lecture[]>('/schedules-liberal-arts.json');
+// 전공 Checkbox 컴포넌트 - React.memo로 최적화
+interface MajorCheckboxProps {
+  major: string;
+}
 
-// TODO: 이 코드를 개선해서 API 호출을 최소화 해보세요 + Promise.all이 현재 잘못 사용되고 있습니다. 같이 개선해주세요.
-const fetchAllLectures = async () => await Promise.all([
-  (console.log('API Call 1', performance.now()), await fetchMajors()),
-  (console.log('API Call 2', performance.now()), await fetchLiberalArts()),
-  (console.log('API Call 3', performance.now()), await fetchMajors()),
-  (console.log('API Call 4', performance.now()), await fetchLiberalArts()),
-  (console.log('API Call 5', performance.now()), await fetchMajors()),
-  (console.log('API Call 6', performance.now()), await fetchLiberalArts()),
-]);
+const MajorCheckbox = memo(({ major }: MajorCheckboxProps) => {
+  return (
+    <Box>
+      <Checkbox size="sm" value={major}>
+        {major.replace(/<p>/gi, ' ')}
+      </Checkbox>
+    </Box>
+  );
+});
 
-// TODO: 이 컴포넌트에서 불필요한 연산이 발생하지 않도록 다양한 방식으로 시도해주세요.
+MajorCheckbox.displayName = 'MajorCheckbox';
+
+// 강의 행 컴포넌트 - React.memo로 최적화
+interface LectureRowProps {
+  lecture: Lecture;
+  onAddSchedule: (lecture: Lecture) => void;
+}
+
+const LectureRow = memo(({ lecture, onAddSchedule }: LectureRowProps) => {
+  return (
+    <Tr>
+      <Td width="100px">{lecture.id}</Td>
+      <Td width="50px">{lecture.grade}</Td>
+      <Td width="200px">{lecture.title}</Td>
+      <Td width="50px">{lecture.credits}</Td>
+      <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.major }}/>
+      <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.schedule }}/>
+      <Td width="80px">
+        <Button size="sm" colorScheme="green" onClick={() => onAddSchedule(lecture)}>추가</Button>
+      </Td>
+    </Tr>
+  );
+});
+
+LectureRow.displayName = 'LectureRow';
+
+// 클로저를 이용한 캐시 구현
+const createCachedFetch = () => {
+  const cache = new Map<string, Promise<AxiosResponse<Lecture[]>>>();
+  
+  return (url: string) => {
+    if (!cache.has(url)) {
+      cache.set(url, axios.get<Lecture[]>(url));
+    }
+    return cache.get(url)!;
+  };
+};
+
+const cachedFetch = createCachedFetch();
+
+// base URL을 포함한 경로 생성 (프로덕션 환경에서 base path 지원)
+const getJsonPath = (path: string) => {
+  // 현재 문서의 base URI를 사용하여 상대 경로를 절대 경로로 변환
+  return new URL(path, document.baseURI).pathname;
+};
+
+const fetchMajors = () => cachedFetch(getJsonPath('schedules-majors.json'));
+const fetchLiberalArts = () => cachedFetch(getJsonPath('schedules-liberal-arts.json'));
+
+// Promise.all에서 await 제거하여 병렬 실행, 캐시로 인해 중복 호출 방지
+const fetchAllLectures = async () => {
+  return Promise.all([
+    (console.log('API Call 1', performance.now()), fetchMajors()),
+    (console.log('API Call 2', performance.now()), fetchLiberalArts()),
+    (console.log('API Call 3', performance.now()), fetchMajors()),
+    (console.log('API Call 4', performance.now()), fetchLiberalArts()),
+    (console.log('API Call 5', performance.now()), fetchMajors()),
+    (console.log('API Call 6', performance.now()), fetchLiberalArts()),
+  ]);
+};
+
 const SearchDialog = ({ searchInfo, onClose }: Props) => {
-  const { setSchedulesMap } = useScheduleContext();
+  const { updateTableSchedules } = useScheduleContext();
 
   const loaderWrapperRef = useRef<HTMLDivElement>(null);
   const loaderRef = useRef<HTMLDivElement>(null);
@@ -111,7 +173,8 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     majors: [],
   });
 
-  const getFilteredLectures = () => {
+  // searchOptions나 lectures가 변경될 때만 필터링 수행
+  const filteredLectures = useMemo(() => {
     const { query = '', credits, grades, days, times, majors } = searchOptions;
     return lectures
       .filter(lecture =>
@@ -135,20 +198,23 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
         const schedules = lecture.schedule ? parseSchedule(lecture.schedule) : [];
         return schedules.some(s => s.range.some(time => times.includes(time)));
       });
-  }
+  }, [searchOptions, lectures]);
 
-  const filteredLectures = getFilteredLectures();
-  const lastPage = Math.ceil(filteredLectures.length / PAGE_SIZE);
-  const visibleLectures = filteredLectures.slice(0, page * PAGE_SIZE);
-  const allMajors = [...new Set(lectures.map(lecture => lecture.major))];
+  const lastPage = useMemo(() => Math.ceil(filteredLectures.length / PAGE_SIZE), [filteredLectures]);
+  
+  // page가 변경될 때만 visibleLectures 재계산
+  const visibleLectures = useMemo(() => filteredLectures.slice(0, page * PAGE_SIZE), [filteredLectures, page]);
+  
+  // lectures가 변경될 때만 allMajors 재계산
+  const allMajors = useMemo(() => [...new Set(lectures.map(lecture => lecture.major))], [lectures]);
 
-  const changeSearchOption = (field: keyof SearchOption, value: SearchOption[typeof field]) => {
+  const changeSearchOption = useCallback((field: keyof SearchOption, value: SearchOption[typeof field]) => {
     setPage(1);
-    setSearchOptions(({ ...searchOptions, [field]: value }));
+    setSearchOptions((prev) => ({ ...prev, [field]: value }));
     loaderWrapperRef.current?.scrollTo(0, 0);
-  };
+  }, []);
 
-  const addSchedule = (lecture: Lecture) => {
+  const addSchedule = useCallback((lecture: Lecture) => {
     if (!searchInfo) return;
 
     const { tableId } = searchInfo;
@@ -158,18 +224,15 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
       lecture
     }));
 
-    setSchedulesMap(prev => ({
-      ...prev,
-      [tableId]: [...prev[tableId], ...schedules]
-    }));
+    updateTableSchedules(tableId, (currentSchedules) => [...currentSchedules, ...schedules]);
 
     onClose();
-  };
+  }, [searchInfo, updateTableSchedules, onClose]);
 
   useEffect(() => {
     const start = performance.now();
     console.log('API 호출 시작: ', start)
-    fetchAllLectures().then(results => {
+    fetchAllLectures().then((results: AxiosResponse<Lecture[]>[]) => {
       const end = performance.now();
       console.log('모든 API 호출 완료 ', end)
       console.log('API 호출에 걸린 시간(ms): ', end - start)
@@ -319,11 +382,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
                   <Stack spacing={2} overflowY="auto" h="100px" border="1px solid" borderColor="gray.200"
                          borderRadius={5} p={2}>
                     {allMajors.map(major => (
-                      <Box key={major}>
-                        <Checkbox key={major} size="sm" value={major}>
-                          {major.replace(/<p>/gi, ' ')}
-                        </Checkbox>
-                      </Box>
+                      <MajorCheckbox key={major} major={major} />
                     ))}
                   </Stack>
                 </CheckboxGroup>
@@ -351,17 +410,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
                 <Table size="sm" variant="striped">
                   <Tbody>
                     {visibleLectures.map((lecture, index) => (
-                      <Tr key={`${lecture.id}-${index}`}>
-                        <Td width="100px">{lecture.id}</Td>
-                        <Td width="50px">{lecture.grade}</Td>
-                        <Td width="200px">{lecture.title}</Td>
-                        <Td width="50px">{lecture.credits}</Td>
-                        <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.major }}/>
-                        <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.schedule }}/>
-                        <Td width="80px">
-                          <Button size="sm" colorScheme="green" onClick={() => addSchedule(lecture)}>추가</Button>
-                        </Td>
-                      </Tr>
+                      <LectureRow key={`${lecture.id}-${index}`} lecture={lecture} onAddSchedule={addSchedule} />
                     ))}
                   </Tbody>
                 </Table>

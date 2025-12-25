@@ -17,7 +17,7 @@ import { Schedule } from "./types.ts";
 import { fill2, parseHnM } from "./utils.ts";
 import { useDndContext, useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { ComponentProps, Fragment } from "react";
+import { ComponentProps, Fragment, memo, useMemo, useCallback } from "react";
 
 interface Props {
   tableId: string;
@@ -38,25 +38,31 @@ const TIMES = [
     .map((v) => `${parseHnM(v)}~${parseHnM(v + 50 * 분)}`),
 ] as const;
 
-const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
-
-  const getColor = (lectureId: string): string => {
+const ScheduleTable = memo(({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
+  // 색상 매핑 메모이제이션
+  const colorMap = useMemo(() => {
     const lectures = [...new Set(schedules.map(({ lecture }) => lecture.id))];
     const colors = ["#fdd", "#ffd", "#dff", "#ddf", "#fdf", "#dfd"];
-    return colors[lectures.indexOf(lectureId) % colors.length];
-  };
+    const map = new Map<string, string>();
+    lectures.forEach((lectureId, index) => {
+      map.set(lectureId, colors[index % colors.length]);
+    });
+    return map;
+  }, [schedules]);
+
+  const getColor = useCallback((lectureId: string): string => {
+    return colorMap.get(lectureId) || "#fdd";
+  }, [colorMap]);
 
   const dndContext = useDndContext();
 
-  const getActiveTableId = () => {
+  const activeTableId = useMemo(() => {
     const activeId = dndContext.active?.id;
     if (activeId) {
       return String(activeId).split(":")[0];
     }
     return null;
-  }
-
-  const activeTableId = getActiveTableId();
+  }, [dndContext.active?.id]);
 
   return (
     <Box
@@ -113,7 +119,7 @@ const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButton
 
       {schedules.map((schedule, index) => (
         <DraggableSchedule
-          key={`${schedule.lecture.title}-${index}`}
+          key={`${schedule.lecture.id}-${schedule.day}-${schedule.range[0]}-${index}`}
           id={`${tableId}:${index}`}
           data={schedule}
           bg={getColor(schedule.lecture.id)}
@@ -125,9 +131,11 @@ const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButton
       ))}
     </Box>
   );
-};
+});
 
-const DraggableSchedule = ({
+ScheduleTable.displayName = 'ScheduleTable';
+
+const DraggableSchedule = memo(({
  id,
  data,
  bg,
@@ -137,25 +145,47 @@ const DraggableSchedule = ({
 }) => {
   const { day, range, room, lecture } = data;
   const { attributes, setNodeRef, listeners, transform } = useDraggable({ id });
-  const leftIndex = DAY_LABELS.indexOf(day as typeof DAY_LABELS[number]);
+  
+  const leftIndex = useMemo(() => 
+    DAY_LABELS.indexOf(day as typeof DAY_LABELS[number]),
+    [day]
+  );
   const topIndex = range[0] - 1;
   const size = range.length;
 
+  // 위치 계산 메모이제이션 - 드래그 중 불필요한 재계산 방지
+  const left = useMemo(() => `${120 + (CellSize.WIDTH * leftIndex) + 1}px`, [leftIndex]);
+  const top = useMemo(() => `${40 + (topIndex * CellSize.HEIGHT + 1)}px`, [topIndex]);
+  const width = useMemo(() => `${CellSize.WIDTH - 1}px`, []);
+  const height = useMemo(() => `${CellSize.HEIGHT * size - 1}px`, [size]);
+
+  // transform 계산 최적화 - 드래그 중 매번 계산하는 것을 방지
+  const transformValue = useMemo(() => {
+    if (!transform) return undefined;
+    return CSS.Translate.toString(transform);
+  }, [transform]);
+
   return (
-    <Popover>
+    <Popover closeOnBlur={false}>
       <PopoverTrigger>
         <Box
           position="absolute"
-          left={`${120 + (CellSize.WIDTH * leftIndex) + 1}px`}
-          top={`${40 + (topIndex * CellSize.HEIGHT + 1)}px`}
-          width={(CellSize.WIDTH - 1) + "px"}
-          height={(CellSize.HEIGHT * size - 1) + "px"}
+          left={left}
+          top={top}
+          width={width}
+          height={height}
           bg={bg}
           p={1}
           boxSizing="border-box"
-          cursor="pointer"
+          cursor="grab"
           ref={setNodeRef}
-          transform={CSS.Translate.toString(transform)}
+          transform={transformValue}
+          willChange="transform"
+          sx={{
+            '&:active': {
+              cursor: 'grabbing',
+            }
+          }}
           {...listeners}
           {...attributes}
         >
@@ -175,6 +205,8 @@ const DraggableSchedule = ({
       </PopoverContent>
     </Popover>
   );
-}
+});
+
+DraggableSchedule.displayName = 'DraggableSchedule';
 
 export default ScheduleTable;

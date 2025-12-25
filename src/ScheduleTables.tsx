@@ -2,36 +2,50 @@ import { Button, ButtonGroup, Flex, Heading, Stack } from "@chakra-ui/react";
 import ScheduleTable from "./ScheduleTable.tsx";
 import { useScheduleContext } from "./ScheduleContext.tsx";
 import SearchDialog from "./SearchDialog.tsx";
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { Schedule } from "./types.ts";
 
 export const ScheduleTables = () => {
-  const { schedulesMap, setSchedulesMap } = useScheduleContext();
+  const { tableIds, schedulesMap, setSchedulesMap, updateTableSchedules, getSchedulesMapSize } = useScheduleContext();
   const [searchInfo, setSearchInfo] = useState<{
     tableId: string;
     day?: string;
     time?: number;
   } | null>(null);
 
-  const disabledRemoveButton = Object.keys(schedulesMap).length === 1;
+  const schedulesMapSize = getSchedulesMapSize();
+  const disabledRemoveButton = useMemo(() => schedulesMapSize === 1, [schedulesMapSize]);
 
-  const duplicate = (targetId: string) => {
+  const duplicate = useCallback((targetId: string) => {
+    const schedules = schedulesMap[targetId] || [];
     setSchedulesMap(prev => ({
       ...prev,
-      [`schedule-${Date.now()}`]: [...prev[targetId]]
-    }))
-  };
+      [`schedule-${Date.now()}`]: [...schedules]
+    }));
+  }, [setSchedulesMap, schedulesMap]);
 
-  const remove = (targetId: string) => {
+  const remove = useCallback((targetId: string) => {
     setSchedulesMap(prev => {
-      delete prev[targetId];
-      return { ...prev };
-    })
-  };
+      const newMap = { ...prev };
+      delete newMap[targetId];
+      return newMap;
+    });
+  }, [setSchedulesMap]);
+
+  // 각 테이블의 schedules를 가져오는 메모이제이션된 entries
+  // updateTableSchedules가 특정 테이블만 업데이트하므로, 변경되지 않은 테이블의 schedules 배열 참조는 유지됨
+  const scheduleEntries = useMemo(() => {
+    return tableIds.map(tableId => [tableId, schedulesMap[tableId] || []] as [string, Schedule[]]);
+  }, [tableIds, schedulesMap]);
+
+  const handleCloseSearchDialog = useCallback(() => {
+    setSearchInfo(null);
+  }, []);
 
   return (
     <>
       <Flex w="full" gap={6} p={6} flexWrap="wrap">
-        {Object.entries(schedulesMap).map(([tableId, schedules], index) => (
+        {scheduleEntries.map(([tableId, schedules], index) => (
           <Stack key={tableId} width="600px">
             <Flex justifyContent="space-between" alignItems="center">
               <Heading as="h3" fontSize="lg">시간표 {index + 1}</Heading>
@@ -43,19 +57,17 @@ export const ScheduleTables = () => {
               </ButtonGroup>
             </Flex>
             <ScheduleTable
-              key={`schedule-table-${index}`}
               schedules={schedules}
               tableId={tableId}
               onScheduleTimeClick={(timeInfo) => setSearchInfo({ tableId, ...timeInfo })}
-              onDeleteButtonClick={({ day, time }) => setSchedulesMap((prev) => ({
-                ...prev,
-                [tableId]: prev[tableId].filter(schedule => schedule.day !== day || !schedule.range.includes(time))
-              }))}
+              onDeleteButtonClick={({ day, time }) => updateTableSchedules(tableId, (currentSchedules) =>
+                currentSchedules.filter(schedule => schedule.day !== day || !schedule.range.includes(time))
+              )}
             />
           </Stack>
         ))}
       </Flex>
-      <SearchDialog searchInfo={searchInfo} onClose={() => setSearchInfo(null)}/>
+      <SearchDialog searchInfo={searchInfo} onClose={handleCloseSearchDialog}/>
     </>
   );
 }
