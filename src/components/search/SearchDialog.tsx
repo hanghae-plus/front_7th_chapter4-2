@@ -7,15 +7,10 @@ import {
   ModalContent,
   ModalHeader,
   ModalOverlay,
-  Table,
-  Tbody,
   Text,
-  Th,
-  Thead,
-  Tr,
   VStack,
 } from '@chakra-ui/react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { PAGE_SIZE } from '../../constants/search.ts';
 import { useScheduleAction } from '../../contexts/ScheduleContext.ts';
 import useAutoCallback from '../../hooks/useAutoCallback.ts';
@@ -30,7 +25,8 @@ import {
   QueryInput,
   TimesCheckboxes,
 } from './SearchFormControls.tsx';
-import SearchItem from './SearchItem.tsx';
+import SearchTableBody from './SearchTableBody.tsx';
+import SearchTableHeader from './SearchTableHeader.tsx';
 
 interface Props {
   searchInfo: {
@@ -56,7 +52,7 @@ const fetchAllLectures = () =>
   ]);
 
 // TODO: 이 컴포넌트에서 불필요한 연산이 발생하지 않도록 다양한 방식으로 시도해주세요.
-const SearchDialog = ({ searchInfo, onClose }: Props) => {
+const SearchDialog = memo(({ searchInfo, onClose }: Props) => {
   const { setSchedulesMap } = useScheduleAction();
 
   const loaderWrapperRef = useRef<HTMLDivElement>(null);
@@ -98,7 +94,10 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
       });
   }, [lectures, searchOptions]);
   const lastPage = Math.ceil(filteredLectures.length / PAGE_SIZE);
-  const visibleLectures = filteredLectures.slice(0, page * PAGE_SIZE);
+  const visibleLectures = useMemo(
+    () => filteredLectures.slice(0, page * PAGE_SIZE),
+    [filteredLectures, page],
+  );
   const allMajors = useMemo(() => [...new Set(lectures.map(lecture => lecture.major))], [lectures]);
 
   const changeSearchOption = useAutoCallback(
@@ -171,17 +170,33 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     setPage(1);
   }, [searchInfo]);
 
-  const handleChange = useMemo(
-    () => ({
-      query: (value: SearchOption['query']) => changeSearchOption('query', value),
-      credits: (value: SearchOption['credits']) => changeSearchOption('credits', value),
-      grades: (value: SearchOption['grades']) => changeSearchOption('grades', value),
-      days: (value: SearchOption['days']) => changeSearchOption('days', value),
-      times: (value: SearchOption['times']) => changeSearchOption('times', value),
-      majors: (value: SearchOption['majors']) => changeSearchOption('majors', value),
-    }),
-    [changeSearchOption],
+  const handleChangeQuery = useAutoCallback((value: SearchOption['query']) =>
+    changeSearchOption('query', value),
   );
+  const handleChangeCredits = useAutoCallback((value: SearchOption['credits']) =>
+    changeSearchOption('credits', value),
+  );
+  const handleChangeGrades = useAutoCallback((value: SearchOption['grades']) =>
+    changeSearchOption('grades', value),
+  );
+  const handleChangeDays = useAutoCallback((value: SearchOption['days']) =>
+    changeSearchOption('days', value),
+  );
+  const handleChangeTimes = useAutoCallback((value: SearchOption['times']) =>
+    changeSearchOption('times', value),
+  );
+  const handleChangeMajors = useAutoCallback((value: SearchOption['majors']) =>
+    changeSearchOption('majors', value),
+  );
+
+  const handleChange = {
+    query: handleChangeQuery,
+    credits: handleChangeCredits,
+    grades: handleChangeGrades,
+    days: handleChangeDays,
+    times: handleChangeTimes,
+    majors: handleChangeMajors,
+  };
 
   return (
     <Modal isOpen={Boolean(searchInfo)} onClose={onClose} size="6xl">
@@ -207,42 +222,21 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
                 items={allMajors}
               />
             </HStack>
-
             <Text align="right">검색결과: {filteredLectures.length}개</Text>
             <Box>
-              <Table>
-                <Thead>
-                  <Tr>
-                    <Th width="100px">과목코드</Th>
-                    <Th width="50px">학년</Th>
-                    <Th width="200px">과목명</Th>
-                    <Th width="50px">학점</Th>
-                    <Th width="150px">전공</Th>
-                    <Th width="150px">시간</Th>
-                    <Th width="80px"></Th>
-                  </Tr>
-                </Thead>
-              </Table>
-              <Box overflowY="auto" maxH="500px" ref={loaderWrapperRef}>
-                <Table size="sm" variant="striped">
-                  <Tbody>
-                    {visibleLectures.map((lecture, index) => (
-                      <SearchItem
-                        key={`${lecture.id}-${index}`}
-                        onClick={addSchedule}
-                        {...lecture}
-                      />
-                    ))}
-                  </Tbody>
-                </Table>
-                <Box ref={loaderRef} h="20px" />
-              </Box>
+              <SearchTableHeader />
+              <SearchTableBody
+                visibleLectures={visibleLectures}
+                onAddSchedule={addSchedule}
+                loaderWrapperRef={loaderWrapperRef}
+                loaderRef={loaderRef}
+              />
             </Box>
           </VStack>
         </ModalBody>
       </ModalContent>
     </Modal>
   );
-};
+});
 
 export default SearchDialog;
