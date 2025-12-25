@@ -15,19 +15,34 @@ export const ScheduleTables = () => {
 
   const disabledRemoveButton = Object.keys(schedulesMap).length === 1;
 
-  const duplicate = (targetId: string) => {
+  const duplicate = useCallback((targetId: string) => {
     setSchedulesMap((prev) => ({
       ...prev,
       [`schedule-${Date.now()}`]: [...prev[targetId]],
     }));
-  };
+  }, []);
 
-  const remove = (targetId: string) => {
+  const remove = useCallback((targetId: string) => {
     setSchedulesMap((prev) => {
       delete prev[targetId];
       return { ...prev };
     });
-  };
+  }, []);
+
+  const handleScheduleTimeClick = useCallback(
+    ({
+      tableId,
+      day,
+      time,
+    }: {
+      tableId: string;
+      day: string;
+      time: number;
+    }) => {
+      setSearchInfo({ tableId, day, time });
+    },
+    []
+  );
 
   const handleDeleteButtonClick = useCallback(
     ({
@@ -86,9 +101,7 @@ export const ScheduleTables = () => {
                 key={`schedule-table-${index}`}
                 schedules={schedules}
                 tableId={tableId}
-                onScheduleTimeClick={(timeInfo) =>
-                  setSearchInfo({ tableId, ...timeInfo })
-                }
+                onScheduleTimeClick={handleScheduleTimeClick}
                 onDeleteButtonClick={handleDeleteButtonClick}
               />
             </ScheduleDndProvider>
