@@ -13,3 +13,9 @@ export interface Schedule {
   range: number[]
   room?: string;
 }
+
+// DND 관련 타입
+export interface ScheduleDragData {
+  schedule: Schedule;
+  bg: string;
+}
