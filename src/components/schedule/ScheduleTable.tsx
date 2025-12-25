@@ -1,8 +1,8 @@
 import { memo, useMemo } from 'react';
 import { Box } from '@chakra-ui/react';
+import { useDndContext } from '@dnd-kit/core';
 import { Schedule } from '../../types';
 import useAutoCallback from '../../hooks/useAutoCallback';
-import useActiveTableId from '../../hooks/useActiveTableId';
 import ScheduleGrid from './ScheduleGrid';
 import DraggableSchedule from './DraggableSchedule';
 
@@ -14,7 +14,7 @@ interface PresenterProps {
   tableId: string;
   schedules: Schedule[];
   colorMap: Map<string, string>;
-  isActive: boolean;
+  isDragging: boolean;
   onCellClick: (day: string, time: number) => void;
   onDelete: (day: string, time: number) => void;
 }
@@ -24,14 +24,14 @@ const ScheduleTablePresenter = memo(
     tableId,
     schedules,
     colorMap,
-    isActive,
+    isDragging,
     onCellClick,
     onDelete,
   }: PresenterProps) => {
     return (
       <Box
         position="relative"
-        outline={isActive ? '5px dashed' : undefined}
+        outline={isDragging ? '5px dashed' : undefined}
         outlineColor="blue.300"
       >
         <ScheduleGrid onCellClick={onCellClick} />
@@ -52,7 +52,7 @@ const ScheduleTablePresenter = memo(
   },
   (prev, next) => {
     if (prev.tableId !== next.tableId) return false;
-    if (prev.isActive !== next.isActive) return false;
+    if (prev.isDragging !== next.isDragging) return false;
     // 참조 비교 우선 - 배열 참조가 같으면 내용도 같음
     if (prev.schedules === next.schedules && prev.colorMap === next.colorMap) {
       return true;
@@ -79,8 +79,8 @@ const ScheduleTable = memo(
     onScheduleTimeClick,
     onDeleteButtonClick,
   }: ScheduleTableProps) => {
-    // Context 구독 - Wrapper에서만
-    const activeTableId = useActiveTableId();
+    const { active } = useDndContext();
+    const isDragging = active !== null;
 
     // 색상 맵 메모이제이션
     const colorMap = useMemo(() => {
@@ -104,7 +104,7 @@ const ScheduleTable = memo(
         tableId={tableId}
         schedules={schedules}
         colorMap={colorMap}
-        isActive={activeTableId === tableId}
+        isDragging={isDragging}
         onCellClick={handleCellClick}
         onDelete={handleDelete}
       />

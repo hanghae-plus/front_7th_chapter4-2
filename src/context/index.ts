@@ -7,6 +7,7 @@ export type { SchedulesMap, ScheduleDispatch } from './ScheduleContext';
 
 // Provider
 export { ScheduleProvider } from './ScheduleProvider';
+export { ScheduleDndProvider } from './ScheduleDndProvider';
 
 // Hooks
 export {
@@ -17,5 +18,4 @@ export {
   useTableCount,
   useSchedulesByTableId,
   useScheduleActions,
-  useActiveTableId,
 } from './useSchedule';

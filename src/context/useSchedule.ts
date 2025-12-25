@@ -126,9 +126,3 @@ export const useScheduleActions = () => {
   );
 };
 
-// activeTableId용 hook (드래그 중인 테이블 표시)
-export const useActiveTableId = (): string | null => {
-  // 이 hook은 별도 Context가 필요할 수 있음
-  // 현재는 null 반환 (추후 구현)
-  return null;
-};

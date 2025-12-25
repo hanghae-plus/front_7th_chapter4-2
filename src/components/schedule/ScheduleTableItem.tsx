@@ -1,19 +1,11 @@
 import { memo } from 'react';
-import {
-  Button,
-  ButtonGroup,
-  Flex,
-  Heading,
-  Stack,
-} from '@chakra-ui/react';
-import { useScheduleActions } from '../../context';
+import { Button, ButtonGroup, Flex, Heading, Stack } from '@chakra-ui/react';
+import { ScheduleDndProvider, useScheduleActions } from '../../context';
 import { Schedule } from '../../types';
 import useAutoCallback from '../../hooks/useAutoCallback';
 import ScheduleTable from './ScheduleTable';
 
-// ============================================
 // 1. ScheduleTableTitle - 제목만 (index 변경 시만 리렌더)
-// ============================================
 interface TitleProps {
   index: number;
 }
@@ -24,12 +16,10 @@ const ScheduleTableTitle = memo(
       시간표 {index + 1}
     </Heading>
   ),
-  (prev, next) => prev.index === next.index
+  (prev, next) => prev.index === next.index,
 );
 
-// ============================================
 // 2. ScheduleTableActions - 버튼 그룹 (disabledRemove 변경 시만 리렌더)
-// ============================================
 interface ActionsProps {
   disabledRemove: boolean;
   onAddClick: () => void;
@@ -38,7 +28,12 @@ interface ActionsProps {
 }
 
 const ScheduleTableActions = memo(
-  ({ disabledRemove, onAddClick, onDuplicateClick, onRemoveClick }: ActionsProps) => (
+  ({
+    disabledRemove,
+    onAddClick,
+    onDuplicateClick,
+    onRemoveClick,
+  }: ActionsProps) => (
     <ButtonGroup size="sm" isAttached>
       <Button colorScheme="green" onClick={onAddClick}>
         시간표 추가
@@ -55,7 +50,7 @@ const ScheduleTableActions = memo(
       </Button>
     </ButtonGroup>
   ),
-  (prev, next) => prev.disabledRemove === next.disabledRemove
+  (prev, next) => prev.disabledRemove === next.disabledRemove,
 );
 
 // ============================================
@@ -69,8 +64,12 @@ interface BodyProps {
 }
 
 const ScheduleTableBody = memo(
-  ({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: BodyProps) => {
-    // Context 구독 제거! schedules를 props로 받음
+  ({
+    tableId,
+    schedules,
+    onScheduleTimeClick,
+    onDeleteButtonClick,
+  }: BodyProps) => {
     return (
       <ScheduleTable
         tableId={tableId}
@@ -81,9 +80,8 @@ const ScheduleTableBody = memo(
     );
   },
   (prev, next) => {
-    // 참조 비교 - 배열 참조가 같으면 리렌더링 안 함!
     return prev.tableId === next.tableId && prev.schedules === next.schedules;
-  }
+  },
 );
 
 // ============================================
@@ -106,7 +104,8 @@ const ScheduleTableItem = memo(
     onOpenSearch,
   }: ScheduleTableItemProps) => {
     // 액션들 (안정적 참조) - Dispatch Context만 구독!
-    const { duplicateTable, removeTable, deleteSchedule } = useScheduleActions();
+    const { duplicateTable, removeTable, deleteSchedule } =
+      useScheduleActions();
 
     // 핸들러들 - tableId 바인딩
     const handleAddClick = useAutoCallback(() => {
@@ -124,13 +123,13 @@ const ScheduleTableItem = memo(
     const handleScheduleTimeClick = useAutoCallback(
       (day: string, time: number) => {
         onOpenSearch(tableId, day, time);
-      }
+      },
     );
 
     const handleDeleteSchedule = useAutoCallback(
       (day: string, time: number) => {
         deleteSchedule(tableId, day, time);
-      }
+      },
     );
 
     return (
@@ -144,24 +143,25 @@ const ScheduleTableItem = memo(
             onRemoveClick={handleRemoveClick}
           />
         </Flex>
-        <ScheduleTableBody
-          tableId={tableId}
-          schedules={schedules}
-          onScheduleTimeClick={handleScheduleTimeClick}
-          onDeleteButtonClick={handleDeleteSchedule}
-        />
+        <ScheduleDndProvider tableId={tableId}>
+          <ScheduleTableBody
+            tableId={tableId}
+            schedules={schedules}
+            onScheduleTimeClick={handleScheduleTimeClick}
+            onDeleteButtonClick={handleDeleteSchedule}
+          />
+        </ScheduleDndProvider>
       </Stack>
     );
   },
   (prevProps, nextProps) => {
-    // 핵심! schedules 참조 비교
     return (
       prevProps.tableId === nextProps.tableId &&
       prevProps.schedules === nextProps.schedules &&
       prevProps.index === nextProps.index &&
       prevProps.disabledRemove === nextProps.disabledRemove
     );
-  }
+  },
 );
 
 export default ScheduleTableItem;
