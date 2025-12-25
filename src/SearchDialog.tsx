@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 import {
   Box,
   Button,
@@ -82,6 +82,42 @@ const TIME_SLOTS = [
 
 const PAGE_SIZE = 100;
 
+// 테이블 행 컴포넌트: 메모이제이션하여 추가되는 행만 렌더링
+interface LectureRowProps {
+  lecture: Lecture;
+  index: number;
+  onAddSchedule: (lecture: Lecture) => void;
+}
+
+const LectureRow = memo(
+  ({ lecture, index, onAddSchedule }: LectureRowProps) => {
+    return (
+      <Tr key={`${lecture.id}-${index}`}>
+        <Td width="100px">{lecture.id}</Td>
+        <Td width="50px">{lecture.grade}</Td>
+        <Td width="200px">{lecture.title}</Td>
+        <Td width="50px">{lecture.credits}</Td>
+        <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.major }} />
+        <Td
+          width="150px"
+          dangerouslySetInnerHTML={{ __html: lecture.schedule }}
+        />
+        <Td width="80px">
+          <Button
+            size="sm"
+            colorScheme="green"
+            onClick={() => onAddSchedule(lecture)}
+          >
+            추가
+          </Button>
+        </Td>
+      </Tr>
+    );
+  }
+);
+
+LectureRow.displayName = 'LectureRow';
+
 // 클로저를 이용한 캐시 함수 생성
 const createCachedFetch = () => {
   let majorsCache: Promise<AxiosResponse<Lecture[]>> | null = null;
@@ -132,21 +168,20 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     majors: [],
   });
 
-  // parseSchedule 결과를 캐싱하여 중복 호출 방지
-  const scheduleCache = useMemo(() => {
-    const cache = new Map<string, ReturnType<typeof parseSchedule>>();
-    lectures.forEach((lecture) => {
-      if (lecture.schedule && !cache.has(lecture.schedule)) {
-        cache.set(lecture.schedule, parseSchedule(lecture.schedule));
-      }
-    });
-    return cache;
-  }, [lectures]);
-
   // 필터링 결과를 메모이제이션: lectures나 searchOptions가 변경될 때만 재계산
   const filteredLectures = useMemo(() => {
     const { query = '', credits, grades, days, times, majors } = searchOptions;
     const lowerQuery = query.toLowerCase(); // 한 번만 계산
+
+    // parseSchedule 결과를 캐싱하여 중복 호출 방지
+    const scheduleCache = new Map<string, ReturnType<typeof parseSchedule>>();
+    const getSchedules = (schedule: string) => {
+      if (!schedule) return [];
+      if (!scheduleCache.has(schedule)) {
+        scheduleCache.set(schedule, parseSchedule(schedule));
+      }
+      return scheduleCache.get(schedule) || [];
+    };
 
     return lectures.filter((lecture) => {
       // 검색어 필터
@@ -174,9 +209,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
 
       // 요일 필터
       if (days.length > 0) {
-        const schedules = lecture.schedule
-          ? scheduleCache.get(lecture.schedule) || []
-          : [];
+        const schedules = getSchedules(lecture.schedule);
         if (!schedules.some((s) => days.includes(s.day))) {
           return false;
         }
@@ -184,9 +217,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
 
       // 시간 필터
       if (times.length > 0) {
-        const schedules = lecture.schedule
-          ? scheduleCache.get(lecture.schedule) || []
-          : [];
+        const schedules = getSchedules(lecture.schedule);
         if (
           !schedules.some((s) => s.range.some((time) => times.includes(time)))
         ) {
@@ -196,12 +227,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
 
       return true;
     });
-  }, [lectures, searchOptions, scheduleCache]);
-
-  const lastPage = useMemo(
-    () => Math.ceil(filteredLectures.length / PAGE_SIZE),
-    [filteredLectures.length]
-  );
+  }, [lectures, searchOptions]);
 
   const visibleLectures = useMemo(
     () => filteredLectures.slice(0, page * PAGE_SIZE),
@@ -228,23 +254,26 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     loaderWrapperRef.current?.scrollTo(0, 0);
   };
 
-  const addSchedule = (lecture: Lecture) => {
-    if (!searchInfo) return;
+  const addSchedule = useCallback(
+    (lecture: Lecture) => {
+      if (!searchInfo) return;
 
-    const { tableId } = searchInfo;
+      const { tableId } = searchInfo;
 
-    const schedules = parseSchedule(lecture.schedule).map((schedule) => ({
-      ...schedule,
-      lecture,
-    }));
+      const schedules = parseSchedule(lecture.schedule).map((schedule) => ({
+        ...schedule,
+        lecture,
+      }));
 
-    setSchedulesMap((prev) => ({
-      ...prev,
-      [tableId]: [...prev[tableId], ...schedules],
-    }));
+      setSchedulesMap((prev) => ({
+        ...prev,
+        [tableId]: [...prev[tableId], ...schedules],
+      }));
 
-    onClose();
-  };
+      onClose();
+    },
+    [searchInfo, setSchedulesMap, onClose]
+  );
 
   useEffect(() => {
     const start = performance.now();
@@ -268,7 +297,11 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
-          setPage((prevPage) => Math.min(lastPage, prevPage + 1));
+          // 함수형 업데이트로 lastPage 의존성 제거
+          setPage((prevPage) => {
+            const maxPage = Math.ceil(filteredLectures.length / PAGE_SIZE);
+            return Math.min(maxPage, prevPage + 1);
+          });
         }
       },
       { threshold: 0, root: $loaderWrapper }
@@ -277,14 +310,30 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     observer.observe($loader);
 
     return () => observer.unobserve($loader);
-  }, [lastPage]);
+    // filteredLectures.length만 의존성으로 사용
+  }, [filteredLectures.length]);
 
   useEffect(() => {
-    setSearchOptions((prev) => ({
-      ...prev,
-      days: searchInfo?.day ? [searchInfo.day] : [],
-      times: searchInfo?.time ? [searchInfo.time] : [],
-    }));
+    // 실제 값이 변경된 경우에만 상태 업데이트
+    setSearchOptions((prev) => {
+      const newDays = searchInfo?.day ? [searchInfo.day] : [];
+      const newTimes = searchInfo?.time ? [searchInfo.time] : [];
+
+      // 값이 실제로 변경된 경우에만 업데이트
+      if (
+        prev.days.length !== newDays.length ||
+        prev.days[0] !== newDays[0] ||
+        prev.times.length !== newTimes.length ||
+        prev.times[0] !== newTimes[0]
+      ) {
+        return {
+          ...prev,
+          days: newDays,
+          times: newTimes,
+        };
+      }
+      return prev;
+    });
     setPage(1);
   }, [searchInfo]);
 
@@ -479,29 +528,12 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
                 <Table size="sm" variant="striped">
                   <Tbody>
                     {visibleLectures.map((lecture, index) => (
-                      <Tr key={`${lecture.id}-${index}`}>
-                        <Td width="100px">{lecture.id}</Td>
-                        <Td width="50px">{lecture.grade}</Td>
-                        <Td width="200px">{lecture.title}</Td>
-                        <Td width="50px">{lecture.credits}</Td>
-                        <Td
-                          width="150px"
-                          dangerouslySetInnerHTML={{ __html: lecture.major }}
-                        />
-                        <Td
-                          width="150px"
-                          dangerouslySetInnerHTML={{ __html: lecture.schedule }}
-                        />
-                        <Td width="80px">
-                          <Button
-                            size="sm"
-                            colorScheme="green"
-                            onClick={() => addSchedule(lecture)}
-                          >
-                            추가
-                          </Button>
-                        </Td>
-                      </Tr>
+                      <LectureRow
+                        key={`${lecture.id}-${index}`}
+                        lecture={lecture}
+                        index={index}
+                        onAddSchedule={addSchedule}
+                      />
                     ))}
                   </Tbody>
                 </Table>
