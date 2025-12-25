@@ -1,8 +1,9 @@
-import { Button, ButtonGroup, Flex, Heading, Stack } from '@chakra-ui/react';
+import { Flex, Heading, Stack } from '@chakra-ui/react';
 import { memo } from 'react';
 import ScheduleDndProvider from '../../contexts/ScheduleDndProvider';
 import useAutoCallback from '../../hooks/useAutoCallback';
 import { Schedule } from '../../types/schedule';
+import ScheduleControls from './ScheduleControls';
 import ScheduleTable from './ScheduleTable';
 
 interface ScheduleBoardProps {
@@ -42,21 +43,13 @@ const ScheduleBoard = memo(
           <Heading as="h3" fontSize="lg">
             시간표 {index + 1}
           </Heading>
-          <ButtonGroup size="sm" isAttached>
-            <Button colorScheme="green" onClick={() => onOpenSearchDialog(tableId)}>
-              시간표 추가
-            </Button>
-            <Button colorScheme="green" mx="1px" onClick={() => onDuplicateBoard(tableId)}>
-              복제
-            </Button>
-            <Button
-              colorScheme="green"
-              isDisabled={isRemoveDisabled}
-              onClick={() => onRemoveBoard(tableId)}
-            >
-              삭제
-            </Button>
-          </ButtonGroup>
+          <ScheduleControls
+            tableId={tableId}
+            onOpenSearchDialog={onOpenSearchDialog}
+            onDuplicateBoard={onDuplicateBoard}
+            onRemoveBoard={onRemoveBoard}
+            isRemoveDisabled={isRemoveDisabled}
+          />
         </Flex>
         <ScheduleDndProvider>
           <ScheduleTable
