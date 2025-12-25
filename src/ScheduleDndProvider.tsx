@@ -5,9 +5,12 @@ import {
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
-import { PropsWithChildren } from "react";
+import { PropsWithChildren, createContext, useContext, useState } from "react";
 import { CellSize, DAY_LABELS } from "./constants.ts";
 import { useScheduleContext } from "./ScheduleContext.tsx";
+
+const areRangesEqual = (a: number[], b: number[]) =>
+  a.length === b.length && a.every((value, index) => value === b[index]);
 
 function createSnapModifier(): Modifier {
   return ({ transform, containerNodeRect, draggingNodeRect }) => {
@@ -45,8 +48,13 @@ function createSnapModifier(): Modifier {
 
 const modifiers = [createSnapModifier()];
 
+const ActiveTableContext = createContext<string | null>(null);
+
+export const useActiveTableId = () => useContext(ActiveTableContext);
+
 export default function ScheduleDndProvider({ children }: PropsWithChildren) {
   const { setSchedulesMap } = useScheduleContext();
+  const [activeTableId, setActiveTableId] = useState<string | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -56,47 +64,77 @@ export default function ScheduleDndProvider({ children }: PropsWithChildren) {
   );
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleDragStart = (event: any) => {
+    const activeId = event.active?.id;
+    if (activeId) {
+      setActiveTableId(String(activeId).split(":")[0]);
+    }
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleDragEnd = (event: any) => {
+    setActiveTableId(null);
     const { active, delta } = event;
     const { x, y } = delta;
     const [tableId, index] = active.id.split(":");
     const moveDayIndex = Math.floor(x / 80);
     const moveTimeIndex = Math.floor(y / 30);
 
+    if (moveDayIndex === 0 && moveTimeIndex === 0) {
+      return;
+    }
+
     setSchedulesMap((prev) => {
       const schedules = prev[tableId];
       if (!schedules) return prev;
 
-      const schedule = schedules[Number(index)];
+      const scheduleIndex = Number(index);
+      const schedule = schedules[scheduleIndex];
       if (!schedule) return prev;
 
       const nowDayIndex = DAY_LABELS.indexOf(
         schedule.day as (typeof DAY_LABELS)[number]
       );
-      const updatedDay = DAY_LABELS[nowDayIndex + moveDayIndex] ?? schedule.day;
+
+      const nextDayIndex = nowDayIndex + moveDayIndex;
+      if (nextDayIndex < 0 || nextDayIndex >= DAY_LABELS.length) {
+        return prev;
+      }
+
+      const updatedDay = DAY_LABELS[nextDayIndex];
       const updatedRange = schedule.range.map((time) => time + moveTimeIndex);
+
+      if (
+        updatedRange.some((time) => time < 1) ||
+        (areRangesEqual(schedule.range, updatedRange) &&
+          schedule.day === updatedDay)
+      ) {
+        return prev;
+      }
+
+      const nextSchedules = [...schedules];
+      nextSchedules[scheduleIndex] = {
+        ...schedule,
+        day: updatedDay,
+        range: updatedRange,
+      };
 
       return {
         ...prev,
-        [tableId]: schedules.map((targetSchedule, targetIndex) =>
-          targetIndex === Number(index)
-            ? {
-                ...targetSchedule,
-                day: updatedDay,
-                range: updatedRange,
-              }
-            : targetSchedule
-        ),
+        [tableId]: nextSchedules,
       };
     });
   };
 
   return (
-    <DndContext
-      sensors={sensors}
-      onDragEnd={handleDragEnd}
-      modifiers={modifiers}>
-      {children}
-    </DndContext>
+    <ActiveTableContext.Provider value={activeTableId}>
+      <DndContext
+        sensors={sensors}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        modifiers={modifiers}>
+        {children}
+      </DndContext>
+    </ActiveTableContext.Provider>
   );
 }

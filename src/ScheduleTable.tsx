@@ -15,13 +15,14 @@ import {
 import { CellSize, DAY_LABELS, 분 } from "./constants.ts";
 import { Schedule } from "./types.ts";
 import { fill2, parseHnM } from "./utils.ts";
-import { useDndContext, useDraggable } from "@dnd-kit/core";
+import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { ComponentProps, Fragment, memo, useCallback, useMemo } from "react";
 
 interface Props {
   tableId: string;
   schedules: Schedule[];
+  isActive?: boolean;
   onScheduleTimeClick?: (timeInfo: {
     tableId: string;
     day: string;
@@ -54,6 +55,7 @@ const SCHEDULE_COLORS = [
 const ScheduleTableComponent = ({
   tableId,
   schedules,
+  isActive = false,
   onScheduleTimeClick,
   onDeleteSchedule,
 }: Props) => {
@@ -67,22 +69,10 @@ const ScheduleTableComponent = ({
     return map;
   }, [schedules]);
 
-  const dndContext = useDndContext();
-
-  const getActiveTableId = () => {
-    const activeId = dndContext.active?.id;
-    if (activeId) {
-      return String(activeId).split(":")[0];
-    }
-    return null;
-  };
-
-  const activeTableId = getActiveTableId();
-
   return (
     <Box
       position="relative"
-      outline={activeTableId === tableId ? "5px dashed" : undefined}
+      outline={isActive ? "5px dashed" : undefined}
       outlineColor="blue.300">
       <ScheduleGrid
         tableId={tableId}
