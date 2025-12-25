@@ -18,10 +18,10 @@ import { fill2, parseHnM } from "./utils.ts";
 import { useDndContext, useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { ComponentProps, Fragment, memo, useCallback, useMemo } from "react";
+import { useSchedules } from "./ScheduleContext.tsx";
 
 interface Props {
   tableId: string;
-  schedules: Schedule[];
   onScheduleTimeClick?: (timeInfo: { day: string, time: number }) => void;
   onDeleteButtonClick?: (timeInfo: { day: string, time: number }) => void;
 }
@@ -38,7 +38,10 @@ const TIMES = [
     .map((v) => `${parseHnM(v)}~${parseHnM(v + 50 * 분)}`),
 ] as const;
 
-const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
+const ScheduleTable = ({ tableId, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
+  // useSchedules 훅으로 특정 tableId의 schedules만 구독
+  // 다른 시간표가 업데이트되어도 리렌더링 방지
+  const schedules = useSchedules(tableId);
 
   // 강의별 색상 매핑을 useMemo로 메모이제이션
   const lectureColors = useMemo(() => {
