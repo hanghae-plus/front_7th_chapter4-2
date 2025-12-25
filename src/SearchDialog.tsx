@@ -152,9 +152,8 @@ const fetchAllLectures = async () => {
   ]);
 };
 
-// TODO: 이 컴포넌트에서 불필요한 연산이 발생하지 않도록 다양한 방식으로 시도해주세요.
 const SearchDialog = ({ searchInfo, onClose }: Props) => {
-  const { setSchedulesMap } = useScheduleContext();
+  const { updateTableSchedules } = useScheduleContext();
 
   const loaderWrapperRef = useRef<HTMLDivElement>(null);
   const loaderRef = useRef<HTMLDivElement>(null);
@@ -219,13 +218,10 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
       lecture
     }));
 
-    setSchedulesMap(prev => ({
-      ...prev,
-      [tableId]: [...prev[tableId], ...schedules]
-    }));
+    updateTableSchedules(tableId, (currentSchedules) => [...currentSchedules, ...schedules]);
 
     onClose();
-  }, [searchInfo, setSchedulesMap, onClose]);
+  }, [searchInfo, updateTableSchedules, onClose]);
 
   useEffect(() => {
     const start = performance.now();
