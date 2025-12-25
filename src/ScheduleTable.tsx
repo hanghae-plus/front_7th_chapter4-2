@@ -62,18 +62,15 @@ const ScheduleTableWrapper = ({
   );
 };
 
-// 내부 컨텐츠는 memo로 감싸서 Wrapper 리렌더링 시에도 재렌더링 방지
-const ScheduleTableContent = memo(
-  ({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
-    const getColor = (lectureId: string): string => {
-      const lectures = [...new Set(schedules.map(({ lecture }) => lecture.id))];
-      const colors = ['#fdd', '#ffd', '#dff', '#ddf', '#fdf', '#dfd'];
-      return colors[lectures.indexOf(lectureId) % colors.length];
-    };
-
+// Grid만 담당하는 컴포넌트 (schedules에 의존하지 않음)
+const ScheduleGrid = memo(
+  ({
+    onScheduleTimeClick,
+  }: {
+    onScheduleTimeClick?: (timeInfo: { day: string; time: number }) => void;
+  }) => {
     return (
-      <>
-        <Grid
+      <Grid
         templateColumns={`120px repeat(${DAY_LABELS.length}, ${CellSize.WIDTH}px)`}
         templateRows={`40px repeat(${TIMES.length}, ${CellSize.HEIGHT}px)`}
         bg="white"
@@ -128,10 +125,29 @@ const ScheduleTableContent = memo(
           </Fragment>
         ))}
       </Grid>
+    );
+  }
+);
 
+// 외부 export용 컴포넌트
+const ScheduleTable = ({
+  tableId,
+  schedules,
+  onScheduleTimeClick,
+  onDeleteButtonClick,
+}: Props) => {
+  const getColor = (lectureId: string): string => {
+    const lectures = [...new Set(schedules.map(({ lecture }) => lecture.id))];
+    const colors = ['#fdd', '#ffd', '#dff', '#ddf', '#fdf', '#dfd'];
+    return colors[lectures.indexOf(lectureId) % colors.length];
+  };
+
+  return (
+    <ScheduleTableWrapper tableId={tableId}>
+      <ScheduleGrid onScheduleTimeClick={onScheduleTimeClick} />
       {schedules.map((schedule, index) => (
         <DraggableSchedule
-          key={`${schedule.lecture.title}-${index}`}
+          key={`${schedule.lecture.id}`}
           id={`${tableId}:${index}`}
           data={schedule}
           bg={getColor(schedule.lecture.id)}
@@ -143,16 +159,6 @@ const ScheduleTableContent = memo(
           }
         />
       ))}
-      </>
-    );
-  }
-);
-
-// 외부 export용 컴포넌트
-const ScheduleTable = (props: Props) => {
-  return (
-    <ScheduleTableWrapper tableId={props.tableId}>
-      <ScheduleTableContent {...props} />
     </ScheduleTableWrapper>
   );
 };
@@ -164,8 +170,8 @@ const DraggableSchedule = memo(
     bg,
     onDeleteButtonClick,
   }: { id: string; data: Schedule } & ComponentProps<typeof Box> & {
-    onDeleteButtonClick: () => void;
-  }) => {
+      onDeleteButtonClick: () => void;
+    }) => {
     const { day, range, room, lecture } = data;
     const { attributes, setNodeRef, listeners, transform } = useDraggable({
       id,
@@ -175,7 +181,7 @@ const DraggableSchedule = memo(
     const size = range.length;
 
     return (
-      <Popover>
+      <Popover isLazy>
         <PopoverTrigger>
           <Box
             position="absolute"

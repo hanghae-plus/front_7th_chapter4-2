@@ -57,6 +57,10 @@ const ScheduleTableItem = memo(
       }
     );
 
+    const onAddClick = useAutoCallback(() => setSearchInfo({ tableId }));
+    const onDuplicateClick = useAutoCallback(() => onDuplicate(tableId));
+    const onRemoveClick = useAutoCallback(() => onRemove(tableId));
+
     return (
       <Stack width="600px">
         <Flex justifyContent="space-between" alignItems="center">
@@ -64,23 +68,16 @@ const ScheduleTableItem = memo(
             시간표 {index + 1}
           </Heading>
           <ButtonGroup size="sm" isAttached>
-            <Button
-              colorScheme="green"
-              onClick={() => setSearchInfo({ tableId })}
-            >
+            <Button colorScheme="green" onClick={onAddClick}>
               시간표 추가
             </Button>
-            <Button
-              colorScheme="green"
-              mx="1px"
-              onClick={() => onDuplicate(tableId)}
-            >
+            <Button colorScheme="green" mx="1px" onClick={onDuplicateClick}>
               복제
             </Button>
             <Button
               colorScheme="green"
               isDisabled={disabledRemoveButton}
-              onClick={() => onRemove(tableId)}
+              onClick={onRemoveClick}
             >
               삭제
             </Button>
