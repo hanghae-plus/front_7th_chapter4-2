@@ -40,7 +40,7 @@ import {
 } from "@chakra-ui/react";
 import { useScheduleDispatch } from "./ScheduleContext.tsx";
 import { Lecture } from "./types.ts";
-import { parseSchedule } from "./utils.ts";
+import { parseSchedule, getScheduleMask } from "./utils.ts"; // [수정] getScheduleMask 추가
 import axios from "axios";
 import { DAY_LABELS } from "./constants.ts";
 
@@ -62,8 +62,10 @@ interface SearchOption {
   credits?: number;
 }
 
+// [수정] 비트마스크 속성(scheduleMask) 추가
 interface LectureWithSchedule extends Lecture {
   schedules: ReturnType<typeof parseSchedule>;
+  scheduleMask: bigint; // O(1) 검색을 위한 핵심 필드
   titleLower: string;
   idLower: string;
 }
@@ -375,6 +377,18 @@ const LectureRow = memo(
   }
 );
 
+// [상수] 비트마스크 계산을 위한 상수 (utils.ts와 로직 동일)
+const BIT_SHIFT = 16n;
+const DAY_TO_BIT_INDEX: Record<string, bigint> = {
+  월: 0n,
+  화: 1n,
+  수: 2n,
+  목: 3n,
+  금: 4n,
+  토: 5n,
+  일: 6n,
+};
+
 const SearchDialog = ({ searchInfo, onClose }: Props) => {
   const { setSchedulesMap } = useScheduleDispatch();
 
@@ -401,6 +415,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
 
   const PAGE_SIZE = 20;
 
+  // [최적화] 필터링 로직에 Loop Invariant 및 비트마스크 적용
   const filteredLectures = useMemo(() => {
     const {
       query = "",
@@ -410,30 +425,59 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
       times,
       majors,
     } = deferredSearchOptions;
+
+    // 1. Loop Invariant: 루프 밖에서 미리 계산 (문자열 변환 등 최소화)
     const queryLower = query.toLowerCase();
+    const creditsStr = credits ? String(credits) : null;
+    const hasGrades = grades.length > 0;
+    const hasMajors = majors.length > 0;
+    const hasDays = days.length > 0;
+    const hasTimes = times.length > 0;
+
+    // 2. 검색 조건 비트마스크 생성
+    // - dayMask: 선택된 요일들의 모든 교시 비트를 1로 켬
+    let dayMask = 0n;
+    if (hasDays) {
+      for (const day of days) {
+        const dayIdx = DAY_TO_BIT_INDEX[day];
+        if (dayIdx !== undefined) {
+          // 해당 요일의 0~15교시(총 16비트)를 모두 1로 채움 (0xFFFF)
+          dayMask |= 0xffffn << (dayIdx * BIT_SHIFT);
+        }
+      }
+    }
+
+    // - timeMask: 선택된 교시들의 모든 요일 비트를 1로 켬
+    let timeMask = 0n;
+    if (hasTimes) {
+      for (const time of times) {
+        // 모든 요일(0~6)에 대해 해당 교시 비트를 켬
+        for (let i = 0n; i < 7n; i++) {
+          timeMask |= 1n << (i * BIT_SHIFT + BigInt(time - 1));
+        }
+      }
+    }
 
     return lectures.filter((lecture) => {
+      // 3. 가벼운 연산(문자열/숫자 비교) 우선 수행
       if (
         queryLower &&
         !lecture.titleLower.includes(queryLower) &&
         !lecture.idLower.includes(queryLower)
       )
         return false;
-      if (grades.length > 0 && !grades.includes(lecture.grade)) return false;
-      if (majors.length > 0 && !majors.includes(lecture.major)) return false;
-      if (credits && !lecture.credits.startsWith(String(credits))) return false;
-      if (
-        days.length > 0 &&
-        !lecture.schedules.some((s) => days.includes(s.day))
-      )
-        return false;
-      if (
-        times.length > 0 &&
-        !lecture.schedules.some((s) =>
-          s.range.some((time) => times.includes(time))
-        )
-      )
-        return false;
+
+      if (hasGrades && !grades.includes(lecture.grade)) return false;
+      if (hasMajors && !majors.includes(lecture.major)) return false;
+      if (creditsStr && !lecture.credits.startsWith(creditsStr)) return false;
+
+      // 4. 무거운 배열 순회(some)를 비트 연산(&)으로 대체
+      // - 요일 검색: (강의마스크 & 선택된요일마스크)가 0이 아니면 겹치는 요일이 있음
+      if (hasDays && (lecture.scheduleMask & dayMask) === 0n) return false;
+
+      // - 시간 검색: (강의마스크 & 선택된시간마스크)가 0이 아니면 겹치는 시간이 있음
+      if (hasTimes && (lecture.scheduleMask & timeMask) === 0n) return false;
+
       return true;
     });
   }, [deferredSearchOptions, lectures]);
@@ -476,8 +520,6 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     [setSchedulesMap, onClose]
   );
 
-  // [수정] 무한 스크롤을 위한 Callback Ref 구현
-  // 로더 요소가 DOM에 나타나는 즉시 옵저버를 연결합니다.
   const loaderRef = useCallback(
     (node: HTMLDivElement | null) => {
       if (observerRef.current) observerRef.current.disconnect();
@@ -498,7 +540,6 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
         observerRef.current.observe(node);
       }
     },
-    // 데이터나 페이지가 변경되어 로더가 다시 렌더링될 때마다 옵저버를 갱신합니다.
     [visibleLectures, filteredLectures]
   );
 
@@ -514,12 +555,23 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
 
       setLectures(
         results.flatMap((result) =>
-          result.data.map((lecture) => ({
-            ...lecture,
-            schedules: lecture.schedule ? parseSchedule(lecture.schedule) : [],
-            titleLower: lecture.title.toLowerCase(),
-            idLower: lecture.id.toLowerCase(),
-          }))
+          result.data.map((lecture) => {
+            // [최적화] 데이터 로딩 시점에 scheduleMask 미리 계산 (O(N) -> O(1))
+            const schedules = lecture.schedule
+              ? parseSchedule(lecture.schedule)
+              : [];
+            const scheduleMask = lecture.schedule
+              ? getScheduleMask(lecture.schedule)
+              : 0n;
+
+            return {
+              ...lecture,
+              schedules,
+              scheduleMask, // 계산된 마스크 주입
+              titleLower: lecture.title.toLowerCase(),
+              idLower: lecture.id.toLowerCase(),
+            };
+          })
         )
       );
     });
