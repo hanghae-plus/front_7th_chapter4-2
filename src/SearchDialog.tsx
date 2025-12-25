@@ -236,19 +236,24 @@ const MajorsCheckboxGroup = React.memo(({ value, allMajors, onChange, onRemoveMa
 MajorsCheckboxGroup.displayName = 'MajorsCheckboxGroup';
 
 // 테이블 행 컴포넌트를 분리하여 메모이제이션
+// dangerouslySetInnerHTML을 useMemo로 최적화
 const LectureRow = React.memo(({ lecture, onAddSchedule }: { lecture: Lecture; onAddSchedule: (lecture: Lecture) => void }) => {
   const handleAdd = useCallback(() => {
     onAddSchedule(lecture);
   }, [lecture, onAddSchedule]);
 
+  // HTML 콘텐츠를 메모이제이션하여 불필요한 재생성 방지
+  const majorHtml = React.useMemo(() => ({ __html: lecture.major }), [lecture.major]);
+  const scheduleHtml = React.useMemo(() => ({ __html: lecture.schedule || '' }), [lecture.schedule]);
+
   return (
-    <Tr>
+    <Tr style={{ contain: 'layout style paint' }}>
       <Td width="100px">{lecture.id}</Td>
       <Td width="50px">{lecture.grade}</Td>
       <Td width="200px">{lecture.title}</Td>
       <Td width="50px">{lecture.credits}</Td>
-      <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.major }}/>
-      <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.schedule || '' }}/>
+      <Td width="150px" dangerouslySetInnerHTML={majorHtml}/>
+      <Td width="150px" dangerouslySetInnerHTML={scheduleHtml}/>
       <Td width="80px">
         <Button size="sm" colorScheme="green" onClick={handleAdd}>추가</Button>
       </Td>
@@ -267,14 +272,74 @@ const ResultsTable = React.memo(({
   filteredCount,
   onAddSchedule,
   loaderWrapperRef,
-  loaderRef
+  loaderRef,
+  onLoadMore
 }: { 
   visibleLectures: Array<{ lecture: Lecture; index: number }>;
   filteredCount: number;
   onAddSchedule: (lecture: Lecture) => void;
   loaderWrapperRef: React.RefObject<HTMLDivElement | null>;
   loaderRef: React.RefObject<HTMLDivElement | null>;
+  onLoadMore: () => void;
 }) => {
+  // IntersectionObserver를 ResultsTable 내부로 이동
+  // throttle을 사용하여 스크롤 성능 최적화
+  const loadingRef = React.useRef(false);
+  
+  React.useEffect(() => {
+    const $loader = loaderRef.current;
+    const $loaderWrapper = loaderWrapperRef.current;
+
+    if (!$loader || !$loaderWrapper) {
+      return;
+    }
+
+    let observer: IntersectionObserver | null = null;
+    let rafId: number | null = null;
+
+    const timeoutId = setTimeout(() => {
+      const currentLoader = loaderRef.current;
+      const currentWrapper = loaderWrapperRef.current;
+      
+      if (!currentLoader || !currentWrapper) {
+        return;
+      }
+
+      observer = new IntersectionObserver(
+        entries => {
+          if (entries[0].isIntersecting && !loadingRef.current) {
+            // requestAnimationFrame으로 스크롤 이벤트 최적화
+            if (rafId !== null) {
+              cancelAnimationFrame(rafId);
+            }
+            
+            rafId = requestAnimationFrame(() => {
+              loadingRef.current = true;
+              onLoadMore();
+              // 다음 프레임에서 로딩 플래그 해제
+              setTimeout(() => {
+                loadingRef.current = false;
+              }, 200);
+            });
+          }
+        },
+        { threshold: 0, root: currentWrapper, rootMargin: '50px' } // rootMargin을 줄여서 더 빠르게 로드
+      );
+
+      observer.observe(currentLoader);
+    }, 50); // timeout을 줄여서 더 빠르게 초기화
+
+    return () => {
+      clearTimeout(timeoutId);
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
+      if (observer) {
+        observer.disconnect();
+      }
+    };
+  }, [loaderRef, loaderWrapperRef, onLoadMore, visibleLectures.length]);
+
   return (
     <>
       <Text align="right">
@@ -295,8 +360,16 @@ const ResultsTable = React.memo(({
           </Thead>
         </Table>
 
-        <Box overflowY="auto" maxH="500px" ref={loaderWrapperRef}>
-          <Table size="sm" variant="striped">
+        <Box 
+          overflowY="auto" 
+          maxH="500px" 
+          ref={loaderWrapperRef}
+          style={{ 
+            willChange: 'scroll-position',
+            contain: 'layout style paint'
+          }}
+        >
+          <Table size="sm" variant="striped" style={{ tableLayout: 'fixed' }}>
             <Tbody>
               {visibleLectures.map(({ lecture, index }) => (
                 <LectureRow 
@@ -323,7 +396,8 @@ const ResultsTable = React.memo(({
   );
   if (lecturesChanged) return false;
   
-  return prevProps.onAddSchedule === nextProps.onAddSchedule;
+  return prevProps.onAddSchedule === nextProps.onAddSchedule &&
+         prevProps.onLoadMore === nextProps.onLoadMore;
 });
 ResultsTable.displayName = 'ResultsTable';
 
@@ -404,69 +478,18 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     onClose();
   }, [searchInfo, setSchedulesMap, onClose]);
 
-  // IntersectionObserver를 모달이 열려있을 때만 작동하도록 수정
-  // useRef를 사용하여 최신 page와 lastPage 값을 참조
-  const pageRef = useRef(page);
-  const lastPageRef = useRef(lastPage);
-  const loadingRef = useRef(false);
-  
-  useEffect(() => {
-    pageRef.current = page;
-  }, [page]);
-  
-  useEffect(() => {
-    lastPageRef.current = lastPage;
+  // 무한 스크롤을 위한 로드 더보기 핸들러
+  // requestAnimationFrame으로 최적화
+  const handleLoadMore = useCallback(() => {
+    requestAnimationFrame(() => {
+      setPage(prevPage => {
+        if (prevPage < lastPage) {
+          return Math.min(lastPage, prevPage + 1);
+        }
+        return prevPage;
+      });
+    });
   }, [lastPage]);
-
-  useEffect(() => {
-    const $loader = loaderRef.current;
-    const $loaderWrapper = loaderWrapperRef.current;
-
-    if (!$loader || !$loaderWrapper || !searchInfo) {
-      return;
-    }
-
-    let observer: IntersectionObserver | null = null;
-    let rafId: number | null = null;
-
-    // setTimeout을 사용하여 DOM 요소가 렌더링된 후 observer 초기화
-    const timeoutId = setTimeout(() => {
-      observer = new IntersectionObserver(
-        entries => {
-          if (entries[0].isIntersecting && !loadingRef.current) {
-            // requestAnimationFrame을 사용하여 스크롤 성능 최적화
-            rafId = requestAnimationFrame(() => {
-              if (pageRef.current < lastPageRef.current) {
-                loadingRef.current = true;
-                setPage(prevPage => {
-                  const nextPage = Math.min(lastPageRef.current, prevPage + 1);
-                  // 다음 프레임에서 loading 플래그 해제
-                  setTimeout(() => {
-                    loadingRef.current = false;
-                  }, 100);
-                  return nextPage;
-                });
-              }
-            });
-          }
-        },
-        { threshold: 0, root: $loaderWrapper, rootMargin: '100px' }
-      );
-
-      observer.observe($loader);
-    }, 100);
-
-    return () => {
-      clearTimeout(timeoutId);
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId);
-      }
-      if (observer) {
-        observer.disconnect();
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchInfo?.tableId]); // searchInfo의 tableId만 추적하여 모달이 열릴 때만 재설정
 
   // searchInfo가 변경될 때만 검색 옵션 업데이트
   useEffect(() => {
@@ -514,13 +537,13 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
 
             <HStack spacing={4}>
               <TimesCheckboxGroup 
-                value={searchOptions.times} 
+                  value={searchOptions.times}
                 sortedTimes={sortedTimes}
                 onChange={handleTimesChange}
                 onRemoveTime={handleTimesRemove}
               />
               <MajorsCheckboxGroup 
-                value={searchOptions.majors} 
+                  value={searchOptions.majors}
                 allMajors={allMajors}
                 onChange={handleMajorsChange}
                 onRemoveMajor={handleMajorsRemove}
@@ -532,6 +555,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
               onAddSchedule={addSchedule}
               loaderWrapperRef={loaderWrapperRef}
               loaderRef={loaderRef}
+              onLoadMore={handleLoadMore}
             />
           </VStack>
         </ModalBody>

@@ -1,5 +1,5 @@
 import { DndContext, Modifier, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent } from "@dnd-kit/core";
-import React, { PropsWithChildren, useCallback, useMemo, useState, useRef, useEffect } from "react";
+import React, { PropsWithChildren, useCallback, useMemo, useState, useRef } from "react";
 import { CellSize, DAY_LABELS } from "./constants.ts";
 import { useScheduleSetAction } from "./ScheduleContext.tsx";
 
