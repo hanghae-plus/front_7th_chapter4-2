@@ -26,12 +26,12 @@ import {
   VStack,
   Wrap,
 } from "@chakra-ui/react";
-import { Lecture } from "./types.ts";
-import { parseSchedule } from "./utils.ts";
+import { Lecture } from "../types.ts";
+import { parseSchedule } from "../utils.ts";
 import axios from "axios";
-import { DAY_LABELS } from "./constants.ts";
-import { LectureTable } from "./LectureTable.tsx";
-import { useScheduleStore } from "./store/index.ts";
+import { DAY_LABELS } from "../constants.ts";
+import { LectureList } from "./LectureList.tsx";
+import { useScheduleStore } from "../store/index.ts";
 
 interface Props {
   searchInfo: {
@@ -400,7 +400,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
                   </Tr>
                 </Thead>
               </Table>
-              <LectureTable
+              <LectureList
                 lectures={filteredLectures}
                 onLectureClick={addSchedule}
               />

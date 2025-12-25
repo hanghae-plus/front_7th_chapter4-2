@@ -1,9 +1,9 @@
 import { Td, Tr, Button } from "@chakra-ui/react";
 
-import { Lecture } from "./types";
+import { Lecture } from "../types";
 import React from "react";
 
-export const LectureTableItem = React.memo(
+export const LectureListItem = React.memo(
   ({
     lecture,
     onClick,

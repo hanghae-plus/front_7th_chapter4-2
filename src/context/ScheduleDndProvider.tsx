@@ -6,8 +6,8 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { PropsWithChildren } from "react";
-import { CellSize, DAY_LABELS } from "./constants.ts";
-import { useScheduleStore } from "./store/index.ts";
+import { CellSize, DAY_LABELS } from "../constants.ts";
+import { useScheduleStore } from "../store/index.ts";
 
 function createSnapModifier(): Modifier {
   return ({ transform, containerNodeRect, draggingNodeRect }) => {

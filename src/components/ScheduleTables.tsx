@@ -1,9 +1,9 @@
 import { Button, ButtonGroup, Flex, Heading, Stack } from "@chakra-ui/react";
-import ScheduleTable from "./ScheduleTable.tsx";
+import { ScheduleTable } from "./ScheduleTable.tsx";
 import SearchDialog from "./SearchDialog.tsx";
 import { useCallback, useState } from "react";
-import ScheduleDndProvider from "./ScheduleDndProvider.tsx";
-import { useScheduleStore } from "./store/index.ts";
+import ScheduleDndProvider from "../context/ScheduleDndProvider.tsx";
+import { useScheduleStore } from "../store/index.ts";
 import { useShallow } from "zustand/react/shallow";
 
 export const ScheduleTables = () => {

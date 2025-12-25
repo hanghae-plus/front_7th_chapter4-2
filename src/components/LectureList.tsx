@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 
 import { Box, Table, Tbody } from "@chakra-ui/react";
-import { Lecture } from "./types";
-import { LectureTableItem } from "./LectureTableItem";
+import { Lecture } from "../types";
+import { LectureListItem } from "./LectureListItem";
 
 const PAGE_SIZE = 100;
 
-export function LectureTable({
+export function LectureList({
   lectures,
   onLectureClick,
 }: {
@@ -53,7 +53,7 @@ export function LectureTable({
       <Table size="sm" variant="striped">
         <Tbody>
           {visibleLectures.map((lecture, index) => (
-            <LectureTableItem
+            <LectureListItem
               key={`${lecture.id}-${index}`}
               lecture={lecture}
               onClick={onLectureClick}
