@@ -184,3 +184,5 @@ export const SearchResults = memo(({ lectures }: SearchResultsProps) => {
     </>
   );
 });
+
+// TODO: ROW도 렌더링됨 큰 덩어리만 렌더링되어야함
