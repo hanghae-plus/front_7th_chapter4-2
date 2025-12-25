@@ -12,18 +12,19 @@ import {
   PopoverTrigger,
   Text,
 } from "@chakra-ui/react";
-import { CellSize, DAY_LABELS, 분 } from "./constants.ts";
-import { Schedule } from "./types.ts";
-import { fill2, parseHnM } from "./utils.ts";
-import { useDndContext, useDraggable } from "@dnd-kit/core";
+import { CellSize, DAY_LABELS, 분 } from "../constants/constants.ts";
+import { Schedule, TimeInfo } from "../types/types.ts";
+import { fill2, parseHnM } from "../utils/utils.ts";
+import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { ComponentProps, Fragment } from "react";
+import { ComponentProps, Fragment, memo, useMemo } from "react";
+import { useActiveTableId } from "../contexts/ScheduleDndProvider.tsx";
 
 interface Props {
   tableId: string;
-  schedules: Schedule[];
-  onScheduleTimeClick?: (timeInfo: { day: string, time: number }) => void;
-  onDeleteButtonClick?: (timeInfo: { day: string, time: number }) => void;
+  schedules: readonly Schedule[];
+  onScheduleTimeClick?: (timeInfo: TimeInfo) => void;
+  onDeleteButtonClick?: (timeInfo: TimeInfo) => void;
 }
 
 const TIMES = [
@@ -38,32 +39,45 @@ const TIMES = [
     .map((v) => `${parseHnM(v)}~${parseHnM(v + 50 * 분)}`),
 ] as const;
 
-const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
+// 드래그 중인 테이블 outline만 표시하는 별도 컴포넌트
+// useActiveTableId를 사용하여 드래그 중 transform 변경에 반응하지 않음
+const ActiveTableOutline = memo(({ tableId }: { tableId: string }) => {
+  const activeTableId = useActiveTableId();
+  const isActive = activeTableId === tableId;
 
-  const getColor = (lectureId: string): string => {
-    const lectures = [...new Set(schedules.map(({ lecture }) => lecture.id))];
-    const colors = ["#fdd", "#ffd", "#dff", "#ddf", "#fdf", "#dfd"];
-    return colors[lectures.indexOf(lectureId) % colors.length];
-  };
-
-  const dndContext = useDndContext();
-
-  const getActiveTableId = () => {
-    const activeId = dndContext.active?.id;
-    if (activeId) {
-      return String(activeId).split(":")[0];
-    }
-    return null;
-  }
-
-  const activeTableId = getActiveTableId();
+  if (!isActive) return null;
 
   return (
     <Box
-      position="relative"
-      outline={activeTableId === tableId ? "5px dashed" : undefined}
+      position="absolute"
+      inset={0}
+      outline="5px dashed"
       outlineColor="blue.300"
-    >
+      pointerEvents="none"
+      zIndex={1}
+    />
+  );
+});
+
+ActiveTableOutline.displayName = 'ActiveTableOutline';
+
+const ScheduleTableComponent = ({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
+
+  const getColor = useMemo(() => {
+    const lectureColorMap = new Map<string, string>();
+    const lectures = [...new Set(schedules.map(({ lecture }) => lecture.id))];
+    const colors = ["#fdd", "#ffd", "#dff", "#ddf", "#fdf", "#dfd"];
+    lectures.forEach((lectureId, index) => {
+      lectureColorMap.set(lectureId, colors[index % colors.length]);
+    });
+    return (lectureId: string): string => {
+      return lectureColorMap.get(lectureId) || colors[0];
+    };
+  }, [schedules]);
+
+  return (
+    <Box position="relative">
+      <ActiveTableOutline tableId={tableId} />
       <Grid
         templateColumns={`120px repeat(${DAY_LABELS.length}, ${CellSize.WIDTH}px)`}
         templateRows={`40px repeat(${TIMES.length}, ${CellSize.HEIGHT}px)`}
@@ -127,7 +141,40 @@ const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButton
   );
 };
 
-const DraggableSchedule = ({
+ScheduleTableComponent.displayName = 'ScheduleTable';
+
+// 커스텀 비교 함수로 불필요한 리렌더링 방지
+const areEqual = (prevProps: Props, nextProps: Props) => {
+  // tableId가 변경되면 리렌더링
+  if (prevProps.tableId !== nextProps.tableId) return false;
+  
+  // schedules 배열의 길이나 내용이 변경되면 리렌더링
+  if (prevProps.schedules.length !== nextProps.schedules.length) return false;
+  
+  // schedules의 각 항목을 비교
+  for (let i = 0; i < prevProps.schedules.length; i++) {
+    const prev = prevProps.schedules[i];
+    const next = nextProps.schedules[i];
+    if (
+      prev.lecture.id !== next.lecture.id ||
+      prev.day !== next.day ||
+      prev.room !== next.room ||
+      JSON.stringify(prev.range) !== JSON.stringify(next.range)
+    ) {
+      return false;
+    }
+  }
+  
+  // 함수 참조는 변경될 수 있지만, 실제로는 동일한 동작을 하므로 무시
+  // (onScheduleTimeClick, onDeleteButtonClick)
+  
+  return true;
+};
+
+// 커스텀 비교 함수를 사용하여 메모이제이션
+const ScheduleTable = memo(ScheduleTableComponent, areEqual);
+
+const DraggableSchedule = memo(({
  id,
  data,
  bg,
@@ -137,25 +184,29 @@ const DraggableSchedule = ({
 }) => {
   const { day, range, room, lecture } = data;
   const { attributes, setNodeRef, listeners, transform } = useDraggable({ id });
-  const leftIndex = DAY_LABELS.indexOf(day as typeof DAY_LABELS[number]);
+  const leftIndex = DAY_LABELS.indexOf(day);
   const topIndex = range[0] - 1;
   const size = range.length;
+
+  const style = useMemo(() => ({
+    position: 'absolute' as const,
+    left: `${120 + (CellSize.WIDTH * leftIndex) + 1}px`,
+    top: `${40 + (topIndex * CellSize.HEIGHT + 1)}px`,
+    width: `${CellSize.WIDTH - 1}px`,
+    height: `${CellSize.HEIGHT * size - 1}px`,
+    transform: CSS.Translate.toString(transform),
+  }), [leftIndex, topIndex, size, transform]);
 
   return (
     <Popover>
       <PopoverTrigger>
         <Box
-          position="absolute"
-          left={`${120 + (CellSize.WIDTH * leftIndex) + 1}px`}
-          top={`${40 + (topIndex * CellSize.HEIGHT + 1)}px`}
-          width={(CellSize.WIDTH - 1) + "px"}
-          height={(CellSize.HEIGHT * size - 1) + "px"}
+          {...style}
           bg={bg}
           p={1}
           boxSizing="border-box"
           cursor="pointer"
           ref={setNodeRef}
-          transform={CSS.Translate.toString(transform)}
           {...listeners}
           {...attributes}
         >
@@ -175,6 +226,8 @@ const DraggableSchedule = ({
       </PopoverContent>
     </Popover>
   );
-}
+});
+
+DraggableSchedule.displayName = 'DraggableSchedule';
 
 export default ScheduleTable;

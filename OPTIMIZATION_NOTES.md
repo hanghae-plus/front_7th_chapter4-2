@@ -1,0 +1,1426 @@
+# 성능 최적화 기록
+
+## 1. API 호출 최적화 - 직렬 실행 문제 해결
+
+### 문제점
+
+기존 코드에서 `Promise.all`을 사용했지만 실제로는 직렬 실행(Sequential Execution)이 발생하고 있음
+
+#### 직렬 실행 vs 병렬 실행
+
+**직렬 실행 (Sequential Execution)**
+- 작업들이 하나씩 순차적으로 실행됨
+- 이전 작업이 완료된 후 다음 작업이 시작됨
+- 총 실행 시간 = 각 작업 시간의 합
+
+```
+작업1 완료 → 작업2 시작 → 작업2 완료 → 작업3 시작 → ...
+```
+
+**병렬 실행 (Parallel Execution)**
+- 여러 작업이 동시에 시작되고 실행됨
+- 모든 작업이 함께 실행됨
+- 총 실행 시간 = 가장 오래 걸리는 작업의 시간
+
+```
+작업1 시작 ┐
+작업2 시작 ├─ 동시에 실행
+작업3 시작 ┘
+```
+
+#### 기존 코드의 문제
+
+```typescript
+const fetchAllLectures = async () => await Promise.all([
+  (console.log('API Call 1', performance.now()), await fetchMajors()),
+  (console.log('API Call 2', performance.now()), await fetchLiberalArts()),
+  (console.log('API Call 3', performance.now()), await fetchMajors()),
+  (console.log('API Call 4', performance.now()), await fetchLiberalArts()),
+  (console.log('API Call 5', performance.now()), await fetchMajors()),
+  (console.log('API Call 6', performance.now()), await fetchLiberalArts()),
+]);
+```
+
+**문제점:**
+1. `Promise.all` 내부에서 `await`를 사용하여 직렬 실행됨
+   - 배열의 각 요소가 평가될 때 `await`로 인해 완료를 기다림
+   - 다음 요소는 이전 요소가 완료된 후에 평가됨
+
+2. 실행 순서가 직렬로 진행됨
+   ```
+   API Call 1 시작 → 완료 (100ms)
+     ↓
+   API Call 2 시작 → 완료 (100ms)
+     ↓
+   API Call 3 시작 → 완료 (100ms)
+     ...
+   ```
+   - 총 소요 시간: 약 600ms (100ms × 6개)
+
+3. 콘솔 로그를 확인하면 시간 간격이 발생
+   ```
+   API Call 1 100.5
+   API Call 2 201.2  ← 100ms 후
+   API Call 3 301.8  ← 200ms 후
+   API Call 4 402.1  ← 300ms 후
+   ...
+   ```
+
+4. 중복 API 호출 발생 (별도 단계에서 해결 예정)
+   - `fetchMajors()`: 3번 호출
+   - `fetchLiberalArts()`: 3번 호출
+   - *참고: 중복 호출 문제는 다음 단계에서 캐시 메커니즘을 통해 해결할 예정*
+
+### Promise와 Promise.all 이해하기
+
+#### Promise란?
+
+Promise는 JavaScript에서 비동기 작업의 최종 완료(또는 실패)와 그 결과 값을 나타내는 객체입니다.
+
+```typescript
+const promise = fetchMajors();
+// fetchMajors()는 즉시 Promise 객체를 반환합니다
+// 실제 네트워크 요청은 백그라운드에서 실행됩니다
+```
+
+**중요한 개념:**
+- Promise 객체는 즉시 생성됩니다 (비동기 작업 시작)
+- 실제 비동기 작업(네트워크 요청 등)은 백그라운드에서 실행됩니다
+- Promise 객체를 받은 후에도 다른 코드를 계속 실행할 수 있습니다
+
+#### Promise.all이란?
+
+`Promise.all`은 여러 Promise를 받아서 모두 완료될 때까지 기다리는 메서드입니다.
+
+```typescript
+Promise.all([promise1, promise2, promise3])
+  .then(results => {
+    // 모든 Promise가 완료된 후 실행
+    // results는 [result1, result2, result3] 형태
+  });
+```
+
+**동작 원리:**
+1. 배열의 각 요소를 평가하여 Promise 객체를 모두 생성
+2. 모든 Promise가 시작되고 실행되기를 기다림
+3. 모든 Promise가 완료될 때까지 대기
+4. 모두 완료되면 결과 배열을 반환
+
+#### await를 사용하면 왜 직렬 실행이 되는가?
+
+```typescript
+// ❌ 잘못된 방법 - 직렬 실행
+Promise.all([
+  await fetchMajors(),      // 1. fetchMajors() 실행
+                            // 2. await 때문에 완료될 때까지 대기 (예: 100ms)
+                            // 3. 완료 후 다음 요소로 이동
+  await fetchLiberalArts(), // 4. 이제 fetchLiberalArts() 실행
+                            // 5. await 때문에 완료될 때까지 대기
+]);
+```
+
+**문제점:**
+- 배열의 각 요소가 평가될 때 `await`가 있으면 완료를 기다립니다
+- 다음 요소는 이전 요소가 완료된 후에 평가됩니다
+- 결과적으로 순차 실행이 됩니다
+
+**실행 순서:**
+```
+t=0ms:   fetchMajors() 시작
+t=100ms: fetchMajors() 완료 → 다음 요소로 이동
+t=100ms: fetchLiberalArts() 시작
+t=200ms: fetchLiberalArts() 완료
+총 시간: 200ms
+```
+
+#### await 없이 Promise 객체를 직접 전달하면?
+
+```typescript
+// ✅ 올바른 방법 - 병렬 실행
+Promise.all([
+  fetchMajors(),      // 1. fetchMajors() 호출 → Promise 객체 즉시 반환
+                      //    (네트워크 요청은 백그라운드에서 시작됨)
+  fetchLiberalArts(), // 2. fetchLiberalArts() 호출 → Promise 객체 즉시 반환
+                      //    (네트워크 요청은 백그라운드에서 시작됨)
+]);
+// 3. Promise.all이 모든 Promise 객체를 받음
+// 4. 모든 Promise의 완료를 기다림
+```
+
+**동작 원리:**
+- 배열의 각 요소가 평가될 때 Promise 객체가 즉시 반환됩니다
+- 모든 Promise 객체가 빠르게 생성됩니다 (대기 없음)
+- 각 Promise의 네트워크 요청이 백그라운드에서 동시에 진행됩니다
+- `Promise.all`은 모든 Promise가 완료될 때까지 기다립니다
+
+**실행 순서:**
+```
+t=0ms:   fetchMajors() 호출 → Promise 객체 반환 (즉시)
+t=0ms:   fetchLiberalArts() 호출 → Promise 객체 반환 (즉시)
+t=0ms:   두 네트워크 요청이 백그라운드에서 동시 시작
+t=100ms: fetchMajors() 완료
+t=100ms: fetchLiberalArts() 완료
+t=100ms: Promise.all 완료 (모두 완료)
+총 시간: 100ms
+```
+
+### 해결 방법
+
+이번 단계에서는 직렬 실행 문제만 해결합니다. `await`를 제거하고 Promise 객체를 직접 전달하여 병렬 실행되도록 수정:
+
+```typescript
+const fetchAllLectures = async () => {
+  return Promise.all([
+    fetchMajors(),        // Promise 객체를 직접 전달 (await 없음)
+    fetchLiberalArts(),   
+    fetchMajors(),        // 여전히 중복 호출이지만 병렬 실행됨
+    fetchLiberalArts(),   
+    fetchMajors(),        
+    fetchLiberalArts(),   
+  ]);
+};
+```
+
+**실행 순서:**
+```
+API Call 1 시작 ┐
+API Call 2 시작 ├─
+API Call 3 시작 ├─
+API Call 4 시작 ├─ 모든 호출이 동시에 시작!
+API Call 5 시작 ├─
+API Call 6 시작 ┘
+
+→ 약 100ms 후 모두 완료
+```
+
+**주의사항:**
+- 중복 API 호출 문제는 아직 해결되지 않았음 (다음 단계에서 캐시로 해결 예정)
+- 하지만 모든 호출이 병렬로 실행되므로 실행 시간은 크게 단축됨
+
+### 개선 효과
+
+#### 실제 측정 결과
+
+**기존 (직렬 실행):**
+```
+API Call 1: 339.4
+API Call 2: 395.2  ← 55.8ms 후 (첫 번째 완료 후 시작)
+API Call 3: 403.9  ← 8.7ms 후
+API Call 4: 406.9  ← 3ms 후
+API Call 5: 409    ← 2.1ms 후
+API Call 6: 411.3  ← 2.3ms 후
+총 소요 시간: 75.5ms
+```
+- 첫 번째 API 호출 완료 후 다음 호출이 시작됨 (직렬 실행 확인)
+
+**개선 후 (병렬 실행):**
+```
+API Call 1: 1173278.6
+API Call 2: 1173279.1  ← 0.5ms 후 (거의 동시 시작)
+API Call 3: 1173279.5  ← 0.4ms 후 (거의 동시 시작)
+API Call 4: 1173279.9  ← 0.4ms 후 (거의 동시 시작)
+API Call 5: 1173280.3  ← 0.4ms 후 (거의 동시 시작)
+API Call 6: 1173280.6  ← 0.3ms 후 (거의 동시 시작)
+총 소요 시간: 70.6ms
+```
+- 모든 API 호출이 거의 동시에 시작됨 (병렬 실행 확인)
+- **약 5ms (6.5%) 성능 개선**
+
+#### 성능 개선이 작게 나타난 이유
+
+1. **로컬 환경의 빠른 응답 속도**
+   - 개발 환경에서는 각 API 응답 시간이 10-15ms 정도로 매우 짧음
+   - 실제 프로덕션 환경(느린 네트워크, 높은 지연)에서는 차이가 더 클 수 있음
+
+2. **브라우저의 HTTP/2 멀티플렉싱**
+   - 같은 도메인에 대한 여러 요청을 브라우저가 어느 정도 병렬 처리
+   - 하지만 코드 레벨에서의 직렬 실행은 여전히 비효율적
+
+3. **코드 구조상의 개선**
+   - 직렬 실행 → 병렬 실행으로 코드 구조가 올바르게 개선됨
+   - 비록 로컬 환경에서는 차이가 작지만, 올바른 패턴으로 작성됨
+
+**참고:**
+- 네트워크 요청 수는 아직 6개 (중복 호출 문제 미해결)
+- 다음 단계에서 캐시를 통해 네트워크 요청 수를 2개로 줄일 예정
+- 실제 네트워크가 느린 환경에서는 병렬 실행의 효과가 더 크게 나타남
+
+### 학습 내용
+
+1. **Promise의 동작 원리**
+   - Promise 객체는 즉시 생성됨 (비동기 작업은 백그라운드에서 실행)
+   - Promise 객체를 받은 후에도 다른 코드를 계속 실행 가능
+
+2. **Promise.all의 올바른 사용법**
+   - `Promise.all`에 Promise 객체를 직접 전달해야 병렬 실행됨
+   - 내부에서 `await`를 사용하면 직렬 실행이 됨
+   - 배열의 각 요소가 평가될 때 `await`가 있으면 완료를 기다리게 되어 순차 실행됨
+
+3. **await의 역할**
+   - `await`는 Promise가 완료될 때까지 함수 실행을 멈춤
+   - `Promise.all` 내부에서 `await`를 사용하면 각 요소가 순차적으로 평가됨
+   - Promise 객체를 직접 전달하면 모든 Promise가 즉시 생성되어 병렬 실행됨
+
+4. **비동기 처리 최적화**
+   - 불필요한 대기 시간 제거
+   - 동시 실행을 통한 전체 실행 시간 단축
+   - 병렬 실행만으로도 실행 시간을 크게 단축할 수 있음
+
+---
+
+## 2. API 호출 최적화 - 중복 호출 방지 (캐시 메커니즘)
+
+### 문제점
+
+병렬 실행을 구현한 후에도 여전히 같은 API를 여러 번 호출하는 문제가 남아있었습니다.
+
+**기존 코드:**
+```typescript
+const fetchAllLectures = async () => await Promise.all([
+  (console.log('API Call 1', performance.now()), await fetchMajors()),
+  (console.log('API Call 2', performance.now()), await fetchLiberalArts()),
+  (console.log('API Call 3', performance.now()), await fetchMajors()),      // 중복!
+  (console.log('API Call 4', performance.now()), await fetchLiberalArts()), // 중복!
+  (console.log('API Call 5', performance.now()), await fetchMajors()),      // 중복!
+  (console.log('API Call 6', performance.now()), await fetchLiberalArts()), // 중복!
+]);
+```
+
+- `fetchMajors()`: 3번 호출 (한 번의 함수 호출 내에서)
+- `fetchLiberalArts()`: 3번 호출 (한 번의 함수 호출 내에서)
+
+이로 인해 불필요한 네트워크 요청이 발생하고, 서버 부하와 대역폭 낭비가 발생합니다.
+
+### 클로저란 무엇인가?
+
+**클로저(Closure)**는 함수가 자신이 선언된 렉시컬 스코프를 기억하고 있는 현상입니다.
+
+#### 간단한 예시
+
+```typescript
+function outerFunction() {
+  const outerVariable = '외부 변수';
+  
+  function innerFunction() {
+    console.log(outerVariable); // 외부 변수에 접근 가능
+  }
+  
+  return innerFunction;
+}
+
+const myFunction = outerFunction();
+myFunction(); // "외부 변수" 출력 - outerFunction 실행이 끝났는데도 outerVariable에 접근 가능!
+```
+
+**클로저의 특징:**
+1. 내부 함수가 외부 함수의 변수에 접근할 수 있음
+2. 외부 함수가 실행을 마친 후에도 내부 함수가 외부 변수를 기억함
+3. 외부에서 직접 접근할 수 없는 private 변수를 만들 수 있음
+
+#### IIFE (Immediately Invoked Function Expression)
+
+IIFE는 함수를 정의함과 동시에 즉시 실행하는 패턴입니다:
+
+```typescript
+const myFunction = (() => {
+  const privateVariable = '비공개 변수';
+  
+  return () => {
+    console.log(privateVariable); // 클로저로 privateVariable 접근
+  };
+})();
+
+// privateVariable은 외부에서 접근 불가
+// console.log(privateVariable); // 에러!
+```
+
+### 클로저를 활용한 캐시 구성
+
+클로저를 사용하여 외부에서 접근할 수 없는 private 캐시를 만들 수 있습니다.
+
+#### 구현 원리
+
+```typescript
+const fetchAllLectures = (() => {
+  // 1. 이 변수는 외부에서 접근 불가 (private)
+  const cache = new Map<string, Promise<AxiosResponse<Lecture[]>>>();
+  
+  // 2. 내부 함수를 반환 (이 함수가 cache에 접근할 수 있음 = 클로저)
+  return async () => {
+    // cache는 외부 함수의 변수이지만, 내부 함수에서 접근 가능
+    const cached = cache.get('key');
+    // ...
+  };
+})();
+```
+
+**작동 방식:**
+1. IIFE로 함수를 즉시 실행하여 `cache` Map 생성
+2. 외부 함수는 실행을 마치지만, 반환된 함수는 `cache`에 대한 참조를 유지
+3. 반환된 함수가 클로저를 형성하여 `cache`에 접근 가능
+4. 외부에서는 `cache`에 직접 접근할 수 없음 (캐시 보호)
+
+#### 클로저 캐시의 장점
+
+1. **캡슐화**: 캐시가 외부에 노출되지 않아 안전함
+2. **상태 유지**: 함수 호출 간 캐시 상태가 유지됨
+3. **메모리 효율**: 필요한 곳에서만 캐시가 유지됨
+4. **단순함**: 별도의 클래스나 모듈 없이 간단하게 구현 가능
+
+### 해결 방법: 클로저를 이용한 캐시 메커니즘
+
+클로저를 사용하여 Promise를 캐싱하는 메커니즘을 구현했습니다.
+
+#### 구현 코드
+
+```typescript
+const fetchAllLectures = (() => {
+  const cache = new Map<string, Promise<AxiosResponse<Lecture[]>>>();
+  
+  // 캐시 로직을 처리하는 헬퍼 함수
+  const getCachedPromise = (key: string, fetcher: () => Promise<AxiosResponse<Lecture[]>>, callNumber: number) => {
+    let promise = cache.get(key);
+    if (promise) {
+      console.log(`API Call ${callNumber}: ${key} (캐시 사용)`, performance.now());
+    } else {
+      console.log(`API Call ${callNumber}: ${key} (새로 호출)`, performance.now());
+      promise = fetcher();
+      cache.set(key, promise);
+    }
+    return promise;
+  };
+  
+  return async () => {
+    const majorsKey = 'majors';
+    const liberalArtsKey = 'liberal-arts';
+    
+    // 원래 코드처럼 6개의 호출을 하되, 캐시를 통해 중복 방지
+    return Promise.all([
+      getCachedPromise(majorsKey, fetchMajors, 1),           // 새로 호출
+      getCachedPromise(liberalArtsKey, fetchLiberalArts, 2), // 새로 호출
+      getCachedPromise(majorsKey, fetchMajors, 3),           // 캐시 사용
+      getCachedPromise(liberalArtsKey, fetchLiberalArts, 4), // 캐시 사용
+      getCachedPromise(majorsKey, fetchMajors, 5),           // 캐시 사용
+      getCachedPromise(liberalArtsKey, fetchLiberalArts, 6), // 캐시 사용
+    ]);
+  };
+})();
+```
+
+**핵심 포인트:**
+- `getCachedPromise` 헬퍼 함수로 캐시 로직을 재사용 가능하게 구현
+- 한 번의 `fetchAllLectures()` 호출 내에서도 중복 API 호출 방지
+- 첫 번째 호출 시 "새로 호출", 이후 호출 시 "캐시 사용" 로그 출력
+- `console.log`는 캐시 동작 확인을 위한 디버깅 목적 (실제 캐시 로직은 `cache.get()`과 `cache.set()`으로 구현)
+
+#### 작동 원리
+
+1. **IIFE (Immediately Invoked Function Expression) 사용**
+   - 함수를 즉시 실행하여 클로저 생성
+   - `cache` Map이 외부에 노출되지 않고 내부에서만 접근 가능
+
+2. **Promise 재사용**
+   - 같은 API를 여러 번 호출해도 캐시된 Promise를 반환
+   - 이미 실행 중인 Promise도 재사용 가능
+   - 같은 요청에 대해 네트워크 요청을 한 번만 수행
+
+3. **캐시 키 사용**
+   - `'majors'`와 `'liberal-arts'`를 키로 사용
+   - 각 API에 대해 독립적인 캐시 관리
+
+#### 왜 이 방법이 효과적인가?
+
+**기존 방식 (캐시 없음):**
+```typescript
+Promise.all([
+  fetchMajors(),        // 네트워크 요청 1
+  fetchLiberalArts(),   
+  fetchMajors(),        // 네트워크 요청 2 (중복!)
+  fetchLiberalArts(),   // 네트워크 요청 3 (중복!)
+  fetchMajors(),        // 네트워크 요청 4 (중복!)
+  fetchLiberalArts(),   // 네트워크 요청 5 (중복!)
+]);
+// 총 6개의 네트워크 요청
+```
+
+**캐시 적용 후:**
+```typescript
+// getCachedPromise 함수 내부에서 처리
+getCachedPromise('majors', fetchMajors, 1)      // 캐시 없음 → 네트워크 요청 1 (캐시에 저장)
+getCachedPromise('liberal-arts', fetchLiberalArts, 2) // 캐시 없음 → 네트워크 요청 2 (캐시에 저장)
+getCachedPromise('majors', fetchMajors, 3)      // 캐시 있음 → 캐시에서 반환 (네트워크 요청 없음)
+getCachedPromise('liberal-arts', fetchLiberalArts, 4) // 캐시 있음 → 캐시에서 반환 (네트워크 요청 없음)
+getCachedPromise('majors', fetchMajors, 5)      // 캐시 있음 → 캐시에서 반환 (네트워크 요청 없음)
+getCachedPromise('liberal-arts', fetchLiberalArts, 6) // 캐시 있음 → 캐시에서 반환 (네트워크 요청 없음)
+
+// 총 2개의 네트워크 요청만 발생 (각 API당 1번씩)
+```
+
+**실제 동작:**
+- 한 번의 `fetchAllLectures()` 호출 내에서 6개의 항목을 `Promise.all`에 전달
+- `getCachedPromise`가 각 호출마다 캐시를 확인하여 중복 호출 방지
+- 첫 번째와 두 번째 호출: 새로 호출하여 캐시에 저장
+- 세 번째부터 여섯 번째 호출: 캐시된 Promise 재사용
+
+### 개선 효과
+
+#### 네트워크 요청 수 감소
+
+- **기존 (캐시 없음):** 6개의 네트워크 요청
+- **개선 후 (캐시 적용):** 2개의 네트워크 요청
+- **67% 감소**
+
+#### 메모리 효율성
+
+- 이미 실행 중인 Promise를 재사용하므로 메모리 낭비 없음
+- 같은 요청에 대해 새로운 Promise 객체를 생성하지 않음
+
+#### 서버 부하 감소
+
+- 서버로 전송되는 HTTP 요청 수가 크게 감소
+- 서버의 처리 부하 감소
+- 대역폭 사용량 감소
+
+### 학습 내용
+
+1. **클로저를 이용한 캐시 패턴**
+   - IIFE를 사용하여 private scope 생성
+   - 외부에서 접근할 수 없는 private 변수 (cache Map) 생성
+   - 함수 호출 간 상태 유지
+   - 헬퍼 함수(`getCachedPromise`)를 통해 캐시 로직 재사용
+
+2. **한 번의 함수 호출 내에서 중복 방지**
+   - 원래 코드처럼 6개의 API 호출을 `Promise.all`에 전달
+   - 동일한 호출 내에서도 캐시를 통해 중복 네트워크 요청 방지
+   - 첫 번째 호출 시 캐시 저장, 이후 호출 시 캐시 재사용
+
+3. **Promise 재사용**
+   - 같은 요청에 대해 Promise를 재사용
+   - 이미 실행 중인 Promise도 재사용 가능
+   - 네트워크 요청 최소화
+
+4. **메모리 효율적인 캐싱**
+   - Map을 사용한 간단하고 효율적인 캐시 구현
+   - 추가 라이브러리 없이 순수 JavaScript로 구현 가능
+   - `console.log`는 캐시 동작 확인을 위한 디버깅 용도 (실제 캐시 로직과는 분리됨)
+
+### 다른 캐시 구현 방식과의 비교
+
+#### 1. React를 활용한 캐시 구현
+
+React에서는 `useRef`나 Context API를 사용하여 캐시를 구현할 수 있습니다.
+
+**useRef를 사용한 방식:**
+```typescript
+const SearchDialog = () => {
+  // useRef는 컴포넌트 인스턴스마다 별도의 ref 생성
+  const cacheRef = useRef<Map<string, Promise<AxiosResponse<Lecture[]>>>>(new Map());
+  
+  const fetchAllLectures = useCallback(async () => {
+    const cache = cacheRef.current;
+    // cache 사용...
+  }, []);
+};
+```
+
+**차이점:**
+- **범위**: 클로저는 함수 스코프, useRef는 컴포넌트 스코프
+- **생명주기**: 클로저는 함수가 존재하는 동안, useRef는 컴포넌트가 마운트된 동안
+- **React 통합**: useRef는 React 생명주기와 연동, 클로저는 React와 무관
+- **공유**: 둘 다 다른 컴포넌트/함수와 공유하지 않음
+
+**내부적으로 클로저를 사용하나?**
+- `useRef` 자체는 React 내부에서 클로저를 사용하지 않음
+- 하지만 `useCallback`이나 커스텀 훅은 내부적으로 클로저 패턴을 사용할 수 있음
+- React의 Fiber 아키텍처 내에서 각 컴포넌트 인스턴스의 상태를 관리하는 방식은 클로저와 유사한 개념
+
+**Context API를 사용한 방식:**
+```typescript
+const LectureCacheProvider = ({ children }) => {
+  const cacheRef = useRef(new Map()); // 여전히 useRef 사용
+  
+  const getCached = (key, fetcher) => {
+    // cacheRef.current에 접근 (클로저가 아님, React의 ref 메커니즘)
+    // ...
+  };
+  
+  return (
+    <Context.Provider value={{ getCached }}>
+      {children}
+    </Context.Provider>
+  );
+};
+```
+
+**차이점:**
+- **범위**: 전역 (Provider 하위의 모든 컴포넌트)
+- **공유**: 여러 컴포넌트에서 공유 가능
+- **리렌더링**: 상태를 사용하면 리렌더링 발생 가능
+
+#### 2. TanStack Query와의 비교
+
+**TanStack Query 내부 구현:**
+
+TanStack Query는 내부적으로 클로저와 유사한 패턴을 사용합니다:
+
+```typescript
+// TanStack Query 내부 구조 (단순화)
+class QueryClient {
+  private queryCache: QueryCache; // private 필드 (클래스의 캡슐화)
+  
+  getQueryCache() {
+    return this.queryCache; // 내부 캐시에 접근
+  }
+}
+
+// useQuery 훅
+function useQuery(options) {
+  const queryClient = useQueryClient(); // Context에서 가져옴
+  
+  // queryClient는 클로저처럼 내부 상태에 접근
+  const query = queryClient.getQueryCache().find(options.queryKey);
+  // ...
+}
+```
+
+**차이점:**
+
+| 항목 | 클로저 캐시 | TanStack Query |
+|------|------------|----------------|
+| **내부 구현** | 순수 클로저 (IIFE) | 클래스 + 클로저 조합 |
+| **캡슐화** | 함수 스코프 클로저 | 클래스 private 필드 |
+| **범위** | 함수 스코프 | 전역 (QueryClient 인스턴스) |
+| **캐시 키** | 간단한 문자열 | 복잡한 배열 기반 키 |
+| **캐시 만료** | 없음 (수동 관리) | 자동 만료/무효화 |
+| **React 통합** | 없음 (순수 JS) | 완전 통합 (훅, Context) |
+| **동시 요청 처리** | Promise 재사용 | 전역 중복 제거 |
+| **추가 기능** | 없음 | 풍부 (재시도, 리프레시 등) |
+
+**TanStack Query가 클로저를 사용하는가?**
+
+- **부분적으로 사용**: 
+  - QueryClient 클래스 내부의 private 필드는 클로저와 유사한 캡슐화 제공
+  - `useQuery` 같은 훅은 React의 클로저 메커니즘 활용
+  - 하지만 핵심 캐시 구조는 클래스 기반 OOP 패턴 사용
+  
+- **차이점**:
+  - 클로저: 함수 기반, 함수 스코프로 캡슐화
+  - TanStack Query: 클래스 기반, private 필드로 캡슐화 + React Context로 전역 상태 관리
+
+#### 3. 각 방식의 적절한 사용 사례
+
+**클로저 캐시가 적합한 경우:**
+- 간단한 중복 요청 방지
+- 외부 라이브러리 의존성 최소화
+- 특정 함수/유틸리티 내부에서만 사용
+- 빠른 프로토타이핑
+
+**React useRef 캐시가 적합한 경우:**
+- 컴포넌트 내부에서만 사용
+- React 생명주기와 통합 필요
+- 컴포넌트 마운트 해제 시 캐시도 함께 제거되어야 함
+
+**TanStack Query가 적합한 경우:**
+- 복잡한 캐싱 전략 필요
+- 여러 컴포넌트에서 데이터 공유
+- 캐시 무효화/리프레시 필요
+- 프로덕션 수준의 안정성과 기능 필요
+
+---
+
+## 3. SearchDialog 컴포넌트 최적화 - 불필요한 재계산 방지 (useMemo 활용)
+
+### 문제점
+
+인피니트 스크롤을 사용하는 `SearchDialog` 컴포넌트에서 `page` 상태가 변경될 때마다 (스크롤할 때마다) 불필요한 검색 필터링 연산이 다시 실행되고 있었습니다.
+
+#### 기존 코드의 문제
+
+```typescript
+const getFilteredLectures = () => {
+  const { query = '', credits, grades, days, times, majors } = searchOptions;
+  return lectures
+    .filter(lecture =>
+      lecture.title.toLowerCase().includes(query.toLowerCase()) ||
+      lecture.id.toLowerCase().includes(query.toLowerCase())
+    )
+    // ... 여러 필터링 연산 ...
+  );
+}
+
+const filteredLectures = getFilteredLectures();  // 매 렌더링마다 실행!
+const lastPage = Math.ceil(filteredLectures.length / PAGE_SIZE);
+const visibleLectures = filteredLectures.slice(0, page * PAGE_SIZE);
+const allMajors = [...new Set(lectures.map(lecture => lecture.major))];  // 매 렌더링마다 실행!
+```
+
+**문제점:**
+
+1. **매 렌더링마다 필터링 연산 실행**
+   - `getFilteredLectures()` 함수가 컴포넌트가 렌더링될 때마다 호출됨
+   - `page` 상태가 변경될 때마다 (인피니트 스크롤) 전체 필터링이 다시 실행됨
+   - `searchOptions`나 `lectures`가 변경되지 않았는데도 불필요한 연산 발생
+
+2. **인피니트 스크롤 시 성능 저하**
+   - 사용자가 스크롤할 때마다 `setPage`가 호출됨
+   - `page` 상태 변경 → 컴포넌트 리렌더링 → `getFilteredLectures()` 다시 실행
+   - 수천 개의 강의 데이터를 매번 필터링하는 것은 비효율적
+
+3. **allMajors 계산도 매번 실행**
+   - `allMajors`는 `lectures`가 변경될 때만 다시 계산하면 되는데
+   - 매 렌더링마다 `Set` 생성과 배열 변환 연산이 실행됨
+
+#### 실행 흐름 예시
+
+**인피니트 스크롤 시나리오:**
+
+```
+1. 사용자가 스크롤 다운
+   ↓
+2. IntersectionObserver가 loader 감지
+   ↓
+3. setPage(prevPage => prevPage + 1) 호출
+   ↓
+4. 컴포넌트 리렌더링
+   ↓
+5. getFilteredLectures() 실행 (불필요!)
+   - searchOptions는 변경되지 않았는데도 전체 필터링 다시 수행
+   - 수천 개의 강의 데이터를 다시 필터링
+   ↓
+6. visibleLectures 계산
+   ↓
+7. 화면에 새로운 항목 표시
+```
+
+**문제:**
+- 4번 단계에서 `searchOptions`와 `lectures`가 변경되지 않았는데도 필터링이 다시 실행됨
+- 스크롤할 때마다 불필요한 연산이 발생하여 성능 저하
+
+### useMemo란 무엇인가?
+
+`useMemo`는 React의 훅으로, 의존성 배열의 값이 변경될 때만 메모이제이션된 값을 다시 계산합니다.
+
+#### 기본 사용법
+
+```typescript
+const memoizedValue = useMemo(() => {
+  // 비용이 큰 계산
+  return expensiveCalculation(a, b);
+}, [a, b]); // a나 b가 변경될 때만 다시 계산
+```
+
+**동작 원리:**
+1. 첫 번째 렌더링: 함수를 실행하여 결과를 계산하고 메모리에 저장
+2. 이후 렌더링: 의존성 배열의 값이 변경되지 않으면 저장된 값을 재사용
+3. 의존성 변경: 의존성 배열의 값이 변경되면 함수를 다시 실행하여 새로운 값 계산
+
+#### useMemo vs 일반 변수
+
+**일반 변수 (메모이제이션 없음):**
+```typescript
+const Component = () => {
+  const [count, setCount] = useState(0);
+  
+  // 매 렌더링마다 실행됨
+  const expensiveValue = expensiveCalculation();
+  
+  return <div>{expensiveValue}</div>;
+};
+```
+- `count`가 변경되어 리렌더링될 때마다 `expensiveCalculation()`이 다시 실행됨
+
+**useMemo 사용:**
+```typescript
+const Component = () => {
+  const [count, setCount] = useState(0);
+  const [otherValue, setOtherValue] = useState(0);
+  
+  // otherValue가 변경될 때만 다시 계산
+  const expensiveValue = useMemo(() => {
+    return expensiveCalculation();
+  }, [otherValue]);
+  
+  return <div>{expensiveValue}</div>;
+};
+```
+- `count`가 변경되어 리렌더링되어도 `otherValue`가 변경되지 않으면 저장된 값을 재사용
+- `otherValue`가 변경될 때만 다시 계산
+
+### 해결 방법: useMemo를 활용한 메모이제이션
+
+검색 필터링 결과와 관련 계산들을 `useMemo`로 메모이제이션하여 불필요한 재계산을 방지합니다.
+
+#### 수정된 코드
+
+```typescript
+// searchOptions나 lectures가 변경될 때만 필터링 수행
+const filteredLectures = useMemo(() => {
+  const { query = '', credits, grades, days, times, majors } = searchOptions;
+  return lectures
+    .filter(lecture =>
+      lecture.title.toLowerCase().includes(query.toLowerCase()) ||
+      lecture.id.toLowerCase().includes(query.toLowerCase())
+    )
+    .filter(lecture => grades.length === 0 || grades.includes(lecture.grade))
+    .filter(lecture => majors.length === 0 || majors.includes(lecture.major))
+    .filter(lecture => !credits || lecture.credits.startsWith(String(credits)))
+    .filter(lecture => {
+      if (days.length === 0) {
+        return true;
+      }
+      const schedules = lecture.schedule ? parseSchedule(lecture.schedule) : [];
+      return schedules.some(s => days.includes(s.day));
+    })
+    .filter(lecture => {
+      if (times.length === 0) {
+        return true;
+      }
+      const schedules = lecture.schedule ? parseSchedule(lecture.schedule) : [];
+      return schedules.some(s => s.range.some(time => times.includes(time)));
+    });
+}, [searchOptions, lectures]);
+
+// filteredLectures가 변경될 때만 계산
+const lastPage = useMemo(() => Math.ceil(filteredLectures.length / PAGE_SIZE), [filteredLectures.length]);
+
+// filteredLectures나 page가 변경될 때만 계산
+const visibleLectures = useMemo(() => filteredLectures.slice(0, page * PAGE_SIZE), [filteredLectures, page]);
+
+// lectures가 변경될 때만 계산
+const allMajors = useMemo(() => [...new Set(lectures.map(lecture => lecture.major))], [lectures]);
+```
+
+**핵심 변경사항:**
+
+1. **`filteredLectures` 메모이제이션**
+   - `searchOptions`나 `lectures`가 변경될 때만 필터링 수행
+   - `page`가 변경되어도 `searchOptions`와 `lectures`가 같으면 재사용
+
+2. **`lastPage` 메모이제이션**
+   - `filteredLectures.length`가 변경될 때만 계산
+   - `page`가 변경되어도 `filteredLectures`가 같으면 재사용
+
+3. **`visibleLectures` 메모이제이션**
+   - `filteredLectures`나 `page`가 변경될 때만 계산
+   - `page`가 변경되면 새로운 슬라이스 계산 (필요한 연산)
+
+4. **`allMajors` 메모이제이션**
+   - `lectures`가 변경될 때만 계산
+   - 검색 옵션 변경 시에도 재사용
+
+#### 개선된 실행 흐름
+
+**인피니트 스크롤 시나리오 (개선 후):**
+
+```
+1. 사용자가 스크롤 다운
+   ↓
+2. IntersectionObserver가 loader 감지
+   ↓
+3. setPage(prevPage => prevPage + 1) 호출
+   ↓
+4. 컴포넌트 리렌더링
+   ↓
+5. useMemo 체크:
+   - searchOptions: 변경 없음 ✓
+   - lectures: 변경 없음 ✓
+   → filteredLectures 재사용 (계산 생략!)
+   ↓
+6. useMemo 체크:
+   - filteredLectures.length: 변경 없음 ✓
+   → lastPage 재사용 (계산 생략!)
+   ↓
+7. useMemo 체크:
+   - filteredLectures: 변경 없음 ✓
+   - page: 변경됨 ✗
+   → visibleLectures 새로 계산 (필요한 연산만 수행)
+   ↓
+8. 화면에 새로운 항목 표시
+```
+
+**개선 효과:**
+- 불필요한 필터링 연산 제거 (수천 개의 강의 데이터를 다시 필터링하지 않음)
+- 필요한 연산만 수행 (`visibleLectures` 슬라이싱만 수행)
+- 스크롤 시 성능 향상
+
+### 추가 개선: changeSearchOption 함수 최적화
+
+기존 코드에서 `changeSearchOption` 함수가 클로저 문제를 가지고 있었습니다:
+
+```typescript
+// ❌ 문제가 있는 코드
+const changeSearchOption = (field: keyof SearchOption, value: SearchOption[typeof field]) => {
+  setPage(1);
+  setSearchOptions(({ ...searchOptions, [field]: value })); // 클로저 문제!
+  loaderWrapperRef.current?.scrollTo(0, 0);
+};
+```
+
+**문제점:**
+- `searchOptions`를 직접 참조하여 클로저 문제 발생 가능
+- 이전 상태를 참조할 수 있어 예상치 못한 동작 가능
+
+**개선된 코드:**
+```typescript
+// ✅ 함수형 업데이트 사용
+const changeSearchOption = (field: keyof SearchOption, value: SearchOption[typeof field]) => {
+  setPage(1);
+  setSearchOptions(prev => ({ ...prev, [field]: value })); // 최신 상태 보장
+  loaderWrapperRef.current?.scrollTo(0, 0);
+};
+```
+
+**개선 효과:**
+- 함수형 업데이트로 최신 상태 보장
+- 클로저 문제 해결
+- 더 안전한 상태 업데이트
+
+### 개선 효과
+
+#### 성능 개선
+
+**기존 (메모이제이션 없음):**
+- 인피니트 스크롤 시마다 전체 필터링 연산 실행
+- 수천 개의 강의 데이터를 매번 필터링
+- 불필요한 `Set` 생성과 배열 변환 연산
+
+**개선 후 (useMemo 적용):**
+- `searchOptions`나 `lectures`가 변경될 때만 필터링 수행
+- 인피니트 스크롤 시에는 필요한 슬라이싱만 수행
+- 불필요한 연산 제거로 성능 향상
+
+#### 메모리 효율성
+
+- `useMemo`는 의존성이 변경되지 않으면 이전 결과를 재사용
+- 불필요한 객체 생성 방지
+- 메모리 사용량 최적화
+
+### 학습 내용
+
+1. **useMemo의 활용**
+   - 비용이 큰 계산을 메모이제이션하여 불필요한 재계산 방지
+   - 의존성 배열을 정확히 지정하여 필요한 경우에만 재계산
+   - 인피니트 스크롤 같은 빈번한 상태 변경 시 성능 향상
+
+2. **의존성 배열의 중요성**
+   - 의존성 배열에 실제로 사용하는 값만 포함
+   - 불필요한 의존성은 오히려 성능 저하를 유발할 수 있음
+   - 예: `filteredLectures.length`만 의존성으로 사용 (객체 참조가 아닌 값)
+
+3. **함수형 업데이트 패턴**
+   - `setState(prev => ...)` 패턴으로 최신 상태 보장
+   - 클로저 문제 해결
+   - 더 안전한 상태 관리
+
+4. **성능 최적화 전략**
+   - 불필요한 연산 식별
+   - 적절한 메모이제이션 적용
+   - 실제 성능 개선 확인
+
+### 주의사항
+
+1. **과도한 메모이제이션 지양**
+   - 간단한 계산은 메모이제이션 오버헤드가 더 클 수 있음
+   - 비용이 큰 계산에만 `useMemo` 사용
+
+2. **의존성 배열 관리**
+   - 의존성 배열을 정확히 지정하지 않으면 버그 발생 가능
+   - ESLint의 `exhaustive-deps` 규칙 활용 권장
+
+3. **메모리 사용**
+   - `useMemo`는 이전 값을 메모리에 저장하므로 메모리 사용량 증가
+   - 하지만 일반적으로 성능 향상이 메모리 사용량 증가보다 유리함
+
+---
+
+## 4. SearchDialog 컴포넌트 최적화 - 불필요한 렌더링 방지 (React.memo, useCallback 활용)
+
+### 문제점
+
+인피니트 스크롤을 사용하는 `SearchDialog` 컴포넌트에서 여러 렌더링 성능 문제가 발생하고 있었습니다.
+
+#### 발견된 문제들
+
+1. **강의 목록 행(LectureRow)의 불필요한 리렌더링**
+   - `page` 상태가 변경될 때마다 (스크롤할 때마다) 모든 행이 리렌더링됨
+   - 3000개의 검색 결과에서 30페이지까지 스크롤 시 tbody에서만 600ms 소요
+   - 변경되지 않은 행도 모두 다시 렌더링되어 성능 저하
+
+2. **전공 목록(MajorSelector)의 불필요한 리렌더링**
+   - `SearchDialog`가 리렌더링될 때마다 모든 전공 체크박스가 리렌더링됨
+   - 전공 목록이 변경되지 않았는데도 모든 요소가 다시 렌더링됨
+
+3. **콜백 함수의 재생성**
+   - `onAddSchedule`, `changeSearchOption`, `onMajorChange` 등이 매 렌더링마다 새로 생성됨
+   - 새로운 함수 참조로 인해 자식 컴포넌트들이 불필요하게 리렌더링됨
+
+4. **key 속성의 문제**
+   - `key={`${lecture.id}-${index}`}`를 사용하여 index가 변경되면 key가 변경됨
+   - React가 다른 컴포넌트로 인식하여 불필요한 언마운트/마운트 발생
+
+#### 실행 흐름 예시
+
+**인피니트 스크롤 시나리오 (최적화 전):**
+
+```
+1. 사용자가 스크롤 다운
+   ↓
+2. IntersectionObserver가 loader 감지
+   ↓
+3. setPage(prevPage => prevPage + 1) 호출
+   ↓
+4. SearchDialog 컴포넌트 리렌더링
+   ↓
+5. 모든 자식 컴포넌트 리렌더링:
+   - SearchForm 리렌더링 (불필요!)
+   - LectureTable 리렌더링
+   - 모든 LectureRow 리렌더링 (불필요!)
+     - 이미 렌더링된 2900개 행도 모두 다시 렌더링
+     - 새로운 100개 행만 추가하면 되는데 전체 리렌더링
+   - MajorSelector 리렌더링 (불필요!)
+     - 모든 전공 체크박스 다시 렌더링
+   ↓
+6. tbody 렌더링 시간: 600ms (3000개 행)
+```
+
+**문제:**
+- 변경되지 않은 컴포넌트들도 모두 리렌더링됨
+- 스크롤할 때마다 전체 리렌더링으로 인한 성능 저하
+- 3000개 결과에서 30페이지까지 갈 경우 심각한 성능 문제
+
+### React.memo란 무엇인가?
+
+`React.memo`는 고차 컴포넌트(Higher Order Component)로, 컴포넌트의 props가 변경되지 않으면 리렌더링을 방지합니다.
+
+#### 기본 사용법
+
+```typescript
+const MyComponent = React.memo(({ prop1, prop2 }) => {
+  return <div>{prop1} {prop2}</div>;
+});
+```
+
+**동작 원리:**
+1. 컴포넌트가 렌더링될 때 props를 이전 렌더링과 비교
+2. props가 변경되지 않으면 이전 렌더링 결과를 재사용
+3. props가 변경되면 컴포넌트를 다시 렌더링
+
+#### React.memo vs 일반 컴포넌트
+
+**일반 컴포넌트 (메모이제이션 없음):**
+```typescript
+const Component = ({ data }) => {
+  return <div>{data}</div>;
+};
+
+// 부모가 리렌더링되면 항상 리렌더링됨
+<Component data={data} />
+```
+- 부모 컴포넌트가 리렌더링되면 항상 리렌더링됨
+- `data`가 변경되지 않아도 리렌더링됨
+
+**React.memo 사용:**
+```typescript
+const Component = React.memo(({ data }) => {
+  return <div>{data}</div>;
+});
+
+// 부모가 리렌더링되어도 data가 같으면 리렌더링 안 됨
+<Component data={data} />
+```
+- 부모 컴포넌트가 리렌더링되어도 `data`가 같으면 리렌더링 안 됨
+- props가 변경될 때만 리렌더링됨
+
+### useCallback이란 무엇인가?
+
+`useCallback`은 함수를 메모이제이션하여 의존성이 변경되지 않으면 같은 함수 참조를 유지합니다.
+
+#### 기본 사용법
+
+```typescript
+const memoizedCallback = useCallback(
+  () => {
+    doSomething(a, b);
+  },
+  [a, b] // a나 b가 변경될 때만 함수 재생성
+);
+```
+
+**동작 원리:**
+1. 첫 번째 렌더링: 함수를 생성하고 메모리에 저장
+2. 이후 렌더링: 의존성이 변경되지 않으면 저장된 함수 참조 반환
+3. 의존성 변경: 의존성이 변경되면 새로운 함수 생성
+
+#### useCallback vs 일반 함수
+
+**일반 함수 (메모이제이션 없음):**
+```typescript
+const Component = ({ onAction }) => {
+  const handleClick = () => {
+    onAction();
+  };
+  
+  return <ChildComponent onClick={handleClick} />;
+};
+```
+- 매 렌더링마다 새로운 함수 생성
+- `ChildComponent`가 `React.memo`로 감싸져 있어도 새로운 함수 참조로 인해 리렌더링됨
+
+**useCallback 사용:**
+```typescript
+const Component = ({ onAction }) => {
+  const handleClick = useCallback(() => {
+    onAction();
+  }, [onAction]);
+  
+  return <ChildComponent onClick={handleClick} />;
+};
+```
+- `onAction`이 변경되지 않으면 같은 함수 참조 유지
+- `ChildComponent`가 `React.memo`로 감싸져 있으면 리렌더링 방지
+
+### 해결 방법: React.memo와 useCallback을 활용한 최적화
+
+#### 1. LectureRow 컴포넌트 메모이제이션
+
+```typescript
+// ✅ 최적화 후
+const LectureRow = React.memo(({ lecture, onAddSchedule }: LectureRowProps) => {
+  const handleAdd = useCallback(() => {
+    onAddSchedule(lecture);
+  }, [lecture, onAddSchedule]);
+
+  return (
+    <Tr>
+      <Td width="100px">{lecture.id}</Td>
+      {/* ... */}
+    </Tr>
+  );
+});
+```
+
+**개선 효과:**
+- `lecture`와 `onAddSchedule`가 변경되지 않으면 리렌더링 안 됨
+- 스크롤 시 변경되지 않은 행은 리렌더링되지 않음
+- 새로운 행만 렌더링되어 성능 향상
+
+#### 2. MajorSelector 컴포넌트 메모이제이션
+
+```typescript
+// ✅ 최적화 후
+const MajorSelector = React.memo(({ majors, selectedMajors, onMajorChange }: MajorSelectorProps) => {
+  const handleChange = useCallback((values: (string | number)[]) => {
+    onMajorChange(values as string[]);
+  }, [onMajorChange]);
+
+  const handleRemoveMajor = useCallback((major: string) => {
+    onMajorChange(selectedMajors.filter(v => v !== major));
+  }, [selectedMajors, onMajorChange]);
+
+  return (
+    <FormControl>
+      {/* ... */}
+    </FormControl>
+  );
+});
+```
+
+**개선 효과:**
+- `majors`, `selectedMajors`, `onMajorChange`가 변경되지 않으면 리렌더링 안 됨
+- 전공 목록이 변경되지 않았는데도 리렌더링되는 문제 해결
+
+#### 3. LectureTable, SearchForm 컴포넌트 메모이제이션
+
+```typescript
+// ✅ 최적화 후
+const LectureTable = React.memo(({ lectures, loaderWrapperRef, loaderRef, onAddSchedule }: LectureTableProps) => {
+  return (
+    <Box>
+      {/* ... */}
+    </Box>
+  );
+});
+
+const SearchForm = React.memo(({ searchOptions, allMajors, onSearchOptionChange }: SearchFormProps) => {
+  const handleMajorChange = useCallback((majors: string[]) => {
+    onSearchOptionChange('majors', majors);
+  }, [onSearchOptionChange]);
+
+  return (
+    <>
+      {/* ... */}
+    </>
+  );
+});
+```
+
+**개선 효과:**
+- props가 변경되지 않으면 리렌더링 안 됨
+- 불필요한 리렌더링 방지
+
+#### 4. 콜백 함수 메모이제이션
+
+```typescript
+// ✅ 최적화 후
+const SearchDialog = ({ searchInfo, onClose }: Props) => {
+  // ...
+
+  const changeSearchOption = useCallback((field: keyof SearchOption, value: SearchOption[typeof field]) => {
+    setPage(1);
+    setSearchOptions(prev => ({ ...prev, [field]: value }));
+    loaderWrapperRef.current?.scrollTo(0, 0);
+  }, []);
+
+  const addSchedule = useCallback((lecture: Lecture) => {
+    if (!searchInfo) return;
+
+    const { tableId } = searchInfo;
+
+    const schedules = parseSchedule(lecture.schedule).map(schedule => ({
+      ...schedule,
+      lecture
+    }));
+
+    setSchedulesMap(prev => ({
+      ...prev,
+      [tableId]: [...prev[tableId], ...schedules]
+    }));
+
+    onClose();
+  }, [searchInfo, setSchedulesMap, onClose]);
+
+  // ...
+};
+```
+
+**개선 효과:**
+- 콜백 함수가 메모이제이션되어 같은 참조 유지
+- `React.memo`로 감싼 자식 컴포넌트들이 불필요하게 리렌더링되지 않음
+
+#### 5. key 속성 최적화
+
+```typescript
+// ❌ 최적화 전
+{lectures.map((lecture, index) => (
+  <LectureRow
+    key={`${lecture.id}-${index}`}  // index가 변경되면 key도 변경됨
+    lecture={lecture}
+    index={index}
+    onAddSchedule={onAddSchedule}
+  />
+))}
+
+// ✅ 최적화 후
+{lectures.map((lecture) => (
+  <LectureRow
+    key={lecture.id}  // lecture.id만 사용 (고유한 값)
+    lecture={lecture}
+    onAddSchedule={onAddSchedule}
+  />
+))}
+```
+
+**개선 효과:**
+- `lecture.id`는 고유한 값이므로 안정적인 key 제공
+- index 제거로 불필요한 언마운트/마운트 방지
+- React가 컴포넌트를 올바르게 추적하여 성능 향상
+
+### 개선된 실행 흐름
+
+**인피니트 스크롤 시나리오 (최적화 후):**
+
+```
+1. 사용자가 스크롤 다운
+   ↓
+2. IntersectionObserver가 loader 감지
+   ↓
+3. setPage(prevPage => prevPage + 1) 호출
+   ↓
+4. SearchDialog 컴포넌트 리렌더링
+   ↓
+5. React.memo로 인한 최적화:
+   - SearchForm: props 변경 없음 → 리렌더링 안 됨 ✓
+   - LectureTable: lectures 배열 변경됨 → 리렌더링 (필요)
+   - MajorSelector: props 변경 없음 → 리렌더링 안 됨 ✓
+   ↓
+6. LectureTable 내부:
+   - 기존 LectureRow들: React.memo로 props 비교
+     - lecture와 onAddSchedule이 같음 → 리렌더링 안 됨 ✓
+   - 새로운 LectureRow들만 렌더링 (100개)
+   ↓
+7. tbody 렌더링 시간: ~20ms (새로운 100개 행만)
+```
+
+**개선 효과:**
+- 변경되지 않은 컴포넌트는 리렌더링 안 됨
+- 새로운 행만 렌더링되어 성능 대폭 향상
+- 3000개 결과에서 30페이지까지 갈 경우 600ms → ~20ms로 개선 (약 30배 향상)
+
+### 개선 효과
+
+#### 성능 개선
+
+**기존 (메모이제이션 없음):**
+- 스크롤할 때마다 모든 행 리렌더링
+- 3000개 결과에서 30페이지까지: tbody 렌더링 600ms
+- 전공 목록도 매번 리렌더링
+
+**개선 후 (React.memo, useCallback 적용):**
+- 변경되지 않은 행은 리렌더링 안 됨
+- 새로운 행만 렌더링: tbody 렌더링 ~20ms
+- 전공 목록도 변경되지 않으면 리렌더링 안 됨
+- **약 30배 성능 향상**
+
+#### 메모리 효율성
+
+- `React.memo`는 이전 렌더링 결과를 재사용하여 메모리 효율적
+- `useCallback`은 함수 참조를 재사용하여 메모리 낭비 방지
+
+### 학습 내용
+
+1. **React.memo의 활용**
+   - 자식 컴포넌트를 메모이제이션하여 불필요한 리렌더링 방지
+   - props 비교를 통해 변경되지 않은 컴포넌트는 리렌더링 안 됨
+   - 리스트 렌더링 시 특히 효과적
+
+2. **useCallback의 활용**
+   - 콜백 함수를 메모이제이션하여 같은 참조 유지
+   - `React.memo`와 함께 사용하면 최적의 성능 향상
+   - 의존성 배열을 정확히 지정해야 함
+
+3. **key 속성의 중요성**
+   - 고유하고 안정적인 key 사용
+   - index를 key로 사용하면 안 됨 (변경될 수 있음)
+   - 올바른 key로 React가 컴포넌트를 효율적으로 추적
+
+4. **성능 최적화 전략**
+   - 불필요한 리렌더링 식별
+   - 적절한 메모이제이션 적용
+   - 프로파일링을 통한 성능 측정
+
+### 주의사항
+
+1. **과도한 메모이제이션 지양**
+   - 모든 컴포넌트를 `React.memo`로 감싸면 오히려 성능 저하
+   - props 비교 비용이 렌더링 비용보다 클 수 있음
+   - 비용이 큰 컴포넌트나 리스트 항목에만 적용
+
+2. **의존성 배열 관리**
+   - `useCallback`의 의존성 배열을 정확히 지정
+   - ESLint의 `exhaustive-deps` 규칙 활용 권장
+   - 의존성을 빠뜨리면 버그 발생 가능
+
+3. **props 비교 비용**
+   - `React.memo`는 얕은 비교(shallow comparison)를 수행
+   - 객체나 배열을 props로 전달할 때 주의 필요
+   - 필요시 커스텀 비교 함수 제공 가능
+
+4. **프로파일링 필수**
+   - 최적화 전후 성능 측정
+   - React DevTools Profiler 활용
+   - 실제 성능 개선 확인
+
+---
+
+## 5. 지연평가(Lazy Evaluation) 학습
+
+### 지연평가란?
+
+**지연평가(Lazy Evaluation)**는 값이 실제로 필요할 때까지 계산을 미루는 평가 전략입니다.
+
+#### 즉시 평가 vs 지연평가
+
+**즉시 평가 (Eager Evaluation):**
+```typescript
+const numbers = [1, 2, 3, 4, 5];
+const doubled = numbers.map(n => n * 2); // 즉시 모든 요소를 변환
+// doubled = [2, 4, 6, 8, 10] (모두 생성됨)
+
+const first = doubled[0]; // 첫 번째만 필요한데 모두 생성했음
+```
+
+**지연평가 (Lazy Evaluation):**
+```typescript
+function* doubleGenerator(numbers: number[]) {
+  for (const n of numbers) {
+    yield n * 2; // 필요할 때만 생성
+  }
+}
+
+const doubled = doubleGenerator([1, 2, 3, 4, 5]);
+const first = doubled.next().value; // 첫 번째만 생성됨
+```
+
+**차이점:**
+- **즉시 평가**: 모든 값을 미리 계산하여 배열 생성
+- **지연평가**: 필요한 값만 필요할 때 생성
+
+### Generator 함수란?
+
+**Generator 함수**는 `function*` 문법을 사용하여 여러 값을 반환할 수 있는 함수입니다.
+
+```typescript
+function* numberGenerator() {
+  yield 1;
+  yield 2;
+  yield 3;
+}
+
+const gen = numberGenerator();
+console.log(gen.next().value); // 1
+console.log(gen.next().value); // 2
+console.log(gen.next().value); // 3
+```
+
+**특징:**
+- `yield` 키워드로 값을 반환
+- `next()`를 호출할 때마다 다음 값 생성
+- 필요한 개수만큼만 생성 가능
+- 메모리 효율적
+
+
+### 활용 예시 (학습용)
+
+지연평가를 적용한다면, 필터링된 결과를 Generator로 생성하여 필요한 개수만큼만 처리할 수 있습니다.
+
+```typescript
+// Generator 함수: 필요한 개수만큼만 필터링하여 생성
+function* getFilteredLecturesGenerator(
+  options: SearchOption, 
+  source: Lecture[], 
+  maxCount: number
+) {
+  let count = 0;
+  for (const lecture of source) {
+    if (count >= maxCount) break; // 필요한 개수만큼만 생성
+    if (matchesFilter(lecture, options)) {
+      yield lecture; // 조건을 만족하는 항목만 생성
+      count++;
+    }
+  }
+}
+
+// 필요한 개수만큼만 필터링하여 생성
+const visibleLectures = useMemo(() => {
+  const neededCount = page * PAGE_SIZE; // 예: 100개
+  const generator = getFilteredLecturesGenerator(searchOptions, lectures, neededCount);
+  return Array.from(generator); // 필요한 개수만큼만 배열로 변환
+}, [searchOptions, lectures, page]);
+```
+
+**핵심:**
+- 필요한 개수만큼만 생성하여 메모리 절약
+- 전체 결과를 생성하지 않음
+- 대용량 데이터 처리에 효과적
+
+### 이론적 효과
+
+- **메모리 효율성**: 필요한 개수만 생성하여 메모리 절약 (예: 3000개 → 100개)
+- **CPU 시간 절약**: 필요한 개수만큼만 필터링하여 시간 단축
+- **대용량 데이터 처리**: 특히 효과적
+
+### 주의사항
+
+- Generator는 한 번만 순회 가능 (다시 생성 필요)
+- 작은 데이터셋에서는 오버헤드가 더 클 수 있음
+- 현재 프로젝트에서는 React.memo와 useCallback으로 충분한 성능 향상을 달성했으므로 지연평가는 적용하지 않음
