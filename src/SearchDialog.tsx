@@ -122,14 +122,20 @@ const createCachedFetch = () => {
 
   const fetchMajors = () => {
     if (!majorsCache) {
-      majorsCache = axios.get<Lecture[]>('/schedules-majors.json');
+      const baseUrl =
+        (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL || '/';
+      majorsCache = axios.get<Lecture[]>(`${baseUrl}schedules-majors.json`);
     }
     return majorsCache;
   };
 
   const fetchLiberalArts = () => {
     if (!liberalArtsCache) {
-      liberalArtsCache = axios.get<Lecture[]>('/schedules-liberal-arts.json');
+      const baseUrl =
+        (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL || '/';
+      liberalArtsCache = axios.get<Lecture[]>(
+        `${baseUrl}schedules-liberal-arts.json`
+      );
     }
     return liberalArtsCache;
   };
