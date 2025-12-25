@@ -18,20 +18,12 @@ import { fill2, parseHnM } from "./utils.ts";
 import { useDndContext, useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import React, { Fragment, useCallback, useMemo } from "react";
+import { useScheduleStore } from "./store/index.ts";
+import { useShallow } from "zustand/react/shallow";
 
 interface Props {
   tableId: string;
-  schedules: Schedule[];
   onScheduleTimeClick?: ({
-    tableId,
-    day,
-    time,
-  }: {
-    tableId: string;
-    day: string;
-    time: number;
-  }) => void;
-  onDeleteButtonClick?: ({
     tableId,
     day,
     time,
@@ -54,12 +46,11 @@ const TIMES = [
     .map((v) => `${parseHnM(v)}~${parseHnM(v + 50 * 분)}`),
 ] as const;
 
-const ScheduleTable = ({
-  tableId,
-  schedules,
-  onScheduleTimeClick,
-  onDeleteButtonClick,
-}: Props) => {
+const ScheduleTable = React.memo(({ tableId, onScheduleTimeClick }: Props) => {
+  const schedules = useScheduleStore(
+    useShallow((state) => state.schedulesMap[tableId])
+  );
+
   const getColor = useCallback(
     (lectureId: string): string => {
       const lectures = [...new Set(schedules.map(({ lecture }) => lecture.id))];
@@ -96,12 +87,11 @@ const ScheduleTable = ({
           id={`${tableId}:${index}`}
           data={schedule}
           getColor={getColor}
-          onDeleteButtonClick={onDeleteButtonClick}
         />
       ))}
     </Box>
   );
-};
+});
 
 const ScheduleTableGrid = React.memo(
   ({
@@ -209,20 +199,10 @@ const DraggableScheduleWrapper = React.memo(
     id,
     data,
     getColor,
-    onDeleteButtonClick,
   }: {
     id: string;
     data: Schedule;
     getColor: (lectureId: string) => string;
-    onDeleteButtonClick?: ({
-      tableId,
-      day,
-      time,
-    }: {
-      tableId: string;
-      day: string;
-      time: number;
-    }) => void;
   }) => {
     const { day, range, room, lecture } = data;
     const { attributes, setNodeRef, listeners, transform } = useDraggable({
@@ -233,10 +213,11 @@ const DraggableScheduleWrapper = React.memo(
     const topIndex = range[0] - 1;
     const size = range.length;
 
+    const removeSchedule = useScheduleStore((state) => state.removeSchedule);
     const handleDeleteButtonClick = useCallback(() => {
       const [tableId] = id.split(":");
-      onDeleteButtonClick?.({ tableId, day, time: range[0] });
-    }, [onDeleteButtonClick, id, day, range]);
+      removeSchedule(tableId, day, range[0]);
+    }, [removeSchedule, id, day, range]);
 
     return (
       <Box
