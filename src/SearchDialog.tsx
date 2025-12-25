@@ -83,11 +83,14 @@ const TIME_SLOTS = [
 
 const PAGE_SIZE = 100;
 
+const base =
+  process.env.NODE_ENV === "production" ? "/front_7th_chapter4-2/" : "/";
+
 const fetchMajors = query("fetchMajors", () =>
-  axios.get<Lecture[]>("/schedules-majors.json")
+  axios.get<Lecture[]>(`${base}schedules-majors.json`)
 );
 const fetchLiberalArts = query("fetchLibralArts", () =>
-  axios.get<Lecture[]>("/schedules-liberal-arts.json")
+  axios.get<Lecture[]>(`${base}schedules-liberal-arts.json`)
 );
 
 // TODO: 이 컴포넌트에서 불필요한 연산이 발생하지 않도록 다양한 방식으로 시도해주세요.
