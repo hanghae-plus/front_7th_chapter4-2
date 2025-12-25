@@ -153,21 +153,39 @@ const DraggableSchedule = memo(({
   const topIndex = range[0] - 1;
   const size = range.length;
 
+  // 위치 계산 메모이제이션 - 드래그 중 불필요한 재계산 방지
+  const left = useMemo(() => `${120 + (CellSize.WIDTH * leftIndex) + 1}px`, [leftIndex]);
+  const top = useMemo(() => `${40 + (topIndex * CellSize.HEIGHT + 1)}px`, [topIndex]);
+  const width = useMemo(() => `${CellSize.WIDTH - 1}px`, []);
+  const height = useMemo(() => `${CellSize.HEIGHT * size - 1}px`, [size]);
+
+  // transform 계산 최적화 - 드래그 중 매번 계산하는 것을 방지
+  const transformValue = useMemo(() => {
+    if (!transform) return undefined;
+    return CSS.Translate.toString(transform);
+  }, [transform]);
+
   return (
-    <Popover>
+    <Popover closeOnBlur={false}>
       <PopoverTrigger>
         <Box
           position="absolute"
-          left={`${120 + (CellSize.WIDTH * leftIndex) + 1}px`}
-          top={`${40 + (topIndex * CellSize.HEIGHT + 1)}px`}
-          width={(CellSize.WIDTH - 1) + "px"}
-          height={(CellSize.HEIGHT * size - 1) + "px"}
+          left={left}
+          top={top}
+          width={width}
+          height={height}
           bg={bg}
           p={1}
           boxSizing="border-box"
-          cursor="pointer"
+          cursor="grab"
           ref={setNodeRef}
-          transform={CSS.Translate.toString(transform)}
+          transform={transformValue}
+          willChange="transform"
+          sx={{
+            '&:active': {
+              cursor: 'grabbing',
+            }
+          }}
           {...listeners}
           {...attributes}
         >
