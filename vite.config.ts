@@ -6,6 +6,28 @@ export default mergeConfig(
   defineConfig({
     plugins: [react()],
     base: '/front_7th_chapter4-2/',
+    build: {
+      rollupOptions: {
+        output: {
+          advancedChunks: {
+            groups: [
+              {
+                name: 'react-vendor',
+                test: /[\\/]node_modules[\\/]react(-dom)?[\\/]/,
+              },
+              {
+                name: 'chakra-vendor',
+                test: /[\\/]node_modules[\\/](@chakra-ui|@emotion|framer-motion)[\\/]/,
+              },
+              {
+                name: 'dnd-vendor',
+                test: /[\\/]node_modules[\\/]@dnd-kit[\\/]/,
+              },
+            ],
+          },
+        },
+      },
+    },
   }),
   defineTestConfig({
     test: {
