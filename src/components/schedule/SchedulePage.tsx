@@ -1,9 +1,10 @@
 import { Flex } from '@chakra-ui/react';
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { useScheduleAction, useScheduleContext } from '../../contexts/ScheduleContext.ts';
 import useAutoCallback from '../../hooks/useAutoCallback.ts';
-import SearchDialog from '../search/SearchDialog.tsx';
 import ScheduleBoard from './ScheduleBoard.tsx';
+
+const SearchDialog = lazy(() => import('../search/SearchDialog.tsx'));
 
 const SchedulePage = () => {
   const schedulesMap = useScheduleContext();
@@ -62,7 +63,11 @@ const SchedulePage = () => {
           />
         ))}
       </Flex>
-      {searchInfo && <SearchDialog searchInfo={searchInfo} onClose={handleCloseSearchDialog} />}
+      {searchInfo && (
+        <Suspense fallback={null}>
+          <SearchDialog searchInfo={searchInfo} onClose={handleCloseSearchDialog} />
+        </Suspense>
+      )}
     </>
   );
 };
