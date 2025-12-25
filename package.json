@@ -1,4 +1,5 @@
 {
+  "homepage": "https://kimfriendship.github.io/front_7th_chapter4-2/",
   "name": "10주차-성능최적화-2-심화과제",
   "private": true,
   "version": "0.0.0",
@@ -9,7 +10,9 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "build": "tsc -b && vite build",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "predeploy": "pnpm run build",
+    "deploy": "gh-pages -d dist"
   },
   "dependencies": {
     "@chakra-ui/icons": "2.2.4",
@@ -22,7 +25,8 @@
     "framer-motion": "latest",
     "msw": "latest",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "zustand": "^5.0.9"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.4.5",
@@ -39,6 +43,7 @@
     "eslint": "^8.57.0",
     "eslint-plugin-react-hooks": "^4.6.2",
     "eslint-plugin-react-refresh": "^0.4.7",
+    "gh-pages": "^6.3.0",
     "tsx": "^4.17.0",
     "typescript": "^5.4.5",
     "vite": "npm:rolldown-vite@latest",
