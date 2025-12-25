@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Button,
@@ -132,56 +132,99 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     majors: [],
   });
 
-  const getFilteredLectures = () => {
-    const { query = '', credits, grades, days, times, majors } = searchOptions;
-    return lectures
-      .filter(
-        (lecture) =>
-          lecture.title.toLowerCase().includes(query.toLowerCase()) ||
-          lecture.id.toLowerCase().includes(query.toLowerCase())
-      )
-      .filter(
-        (lecture) => grades.length === 0 || grades.includes(lecture.grade)
-      )
-      .filter(
-        (lecture) => majors.length === 0 || majors.includes(lecture.major)
-      )
-      .filter(
-        (lecture) => !credits || lecture.credits.startsWith(String(credits))
-      )
-      .filter((lecture) => {
-        if (days.length === 0) {
-          return true;
-        }
-        const schedules = lecture.schedule
-          ? parseSchedule(lecture.schedule)
-          : [];
-        return schedules.some((s) => days.includes(s.day));
-      })
-      .filter((lecture) => {
-        if (times.length === 0) {
-          return true;
-        }
-        const schedules = lecture.schedule
-          ? parseSchedule(lecture.schedule)
-          : [];
-        return schedules.some((s) =>
-          s.range.some((time) => times.includes(time))
-        );
-      });
-  };
+  // parseSchedule 결과를 캐싱하여 중복 호출 방지
+  const scheduleCache = useMemo(() => {
+    const cache = new Map<string, ReturnType<typeof parseSchedule>>();
+    lectures.forEach((lecture) => {
+      if (lecture.schedule && !cache.has(lecture.schedule)) {
+        cache.set(lecture.schedule, parseSchedule(lecture.schedule));
+      }
+    });
+    return cache;
+  }, [lectures]);
 
-  const filteredLectures = getFilteredLectures();
-  const lastPage = Math.ceil(filteredLectures.length / PAGE_SIZE);
-  const visibleLectures = filteredLectures.slice(0, page * PAGE_SIZE);
-  const allMajors = [...new Set(lectures.map((lecture) => lecture.major))];
+  // 필터링 결과를 메모이제이션: lectures나 searchOptions가 변경될 때만 재계산
+  const filteredLectures = useMemo(() => {
+    const { query = '', credits, grades, days, times, majors } = searchOptions;
+    const lowerQuery = query.toLowerCase(); // 한 번만 계산
+
+    return lectures.filter((lecture) => {
+      // 검색어 필터
+      if (query) {
+        const matchesQuery =
+          lecture.title.toLowerCase().includes(lowerQuery) ||
+          lecture.id.toLowerCase().includes(lowerQuery);
+        if (!matchesQuery) return false;
+      }
+
+      // 학년 필터
+      if (grades.length > 0 && !grades.includes(lecture.grade)) {
+        return false;
+      }
+
+      // 전공 필터
+      if (majors.length > 0 && !majors.includes(lecture.major)) {
+        return false;
+      }
+
+      // 학점 필터
+      if (credits && !lecture.credits.startsWith(String(credits))) {
+        return false;
+      }
+
+      // 요일 필터
+      if (days.length > 0) {
+        const schedules = lecture.schedule
+          ? scheduleCache.get(lecture.schedule) || []
+          : [];
+        if (!schedules.some((s) => days.includes(s.day))) {
+          return false;
+        }
+      }
+
+      // 시간 필터
+      if (times.length > 0) {
+        const schedules = lecture.schedule
+          ? scheduleCache.get(lecture.schedule) || []
+          : [];
+        if (
+          !schedules.some((s) => s.range.some((time) => times.includes(time)))
+        ) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [lectures, searchOptions, scheduleCache]);
+
+  const lastPage = useMemo(
+    () => Math.ceil(filteredLectures.length / PAGE_SIZE),
+    [filteredLectures.length]
+  );
+
+  const visibleLectures = useMemo(
+    () => filteredLectures.slice(0, page * PAGE_SIZE),
+    [filteredLectures, page]
+  );
+
+  const allMajors = useMemo(
+    () => [...new Set(lectures.map((lecture) => lecture.major))],
+    [lectures]
+  );
+
+  // 정렬된 times 배열을 메모이제이션
+  const sortedTimes = useMemo(
+    () => [...searchOptions.times].sort((a, b) => a - b),
+    [searchOptions.times]
+  );
 
   const changeSearchOption = (
     field: keyof SearchOption,
     value: SearchOption[typeof field]
   ) => {
     setPage(1);
-    setSearchOptions({ ...searchOptions, [field]: value });
+    setSearchOptions((prev) => ({ ...prev, [field]: value }));
     loaderWrapperRef.current?.scrollTo(0, 0);
   };
 
@@ -328,26 +371,24 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
                   }
                 >
                   <Wrap spacing={1} mb={2}>
-                    {searchOptions.times
-                      .sort((a, b) => a - b)
-                      .map((time) => (
-                        <Tag
-                          key={time}
-                          size="sm"
-                          variant="outline"
-                          colorScheme="blue"
-                        >
-                          <TagLabel>{time}교시</TagLabel>
-                          <TagCloseButton
-                            onClick={() =>
-                              changeSearchOption(
-                                'times',
-                                searchOptions.times.filter((v) => v !== time)
-                              )
-                            }
-                          />
-                        </Tag>
-                      ))}
+                    {sortedTimes.map((time) => (
+                      <Tag
+                        key={time}
+                        size="sm"
+                        variant="outline"
+                        colorScheme="blue"
+                      >
+                        <TagLabel>{time}교시</TagLabel>
+                        <TagCloseButton
+                          onClick={() =>
+                            changeSearchOption(
+                              'times',
+                              searchOptions.times.filter((v) => v !== time)
+                            )
+                          }
+                        />
+                      </Tag>
+                    ))}
                   </Wrap>
                   <Stack
                     spacing={2}
