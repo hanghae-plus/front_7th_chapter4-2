@@ -1,8 +1,9 @@
 import { Button, ButtonGroup, Flex, Heading, Stack } from "@chakra-ui/react";
 import ScheduleTable from "./ScheduleTable.tsx";
-import { useScheduleContext } from "./ScheduleContext.tsx";
+import { ScheduleProvider, useScheduleContext } from "./ScheduleContext.tsx";
 import SearchDialog from "./SearchDialog.tsx";
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import ScheduleDndProvider from "./ScheduleDndProvider.tsx";
 
 export const ScheduleTables = () => {
   const { schedulesMap, setSchedulesMap } = useScheduleContext();
@@ -28,6 +29,8 @@ export const ScheduleTables = () => {
     })
   };
 
+  const closeSearchDialog = useCallback(() => setSearchInfo(null), []);
+
   return (
     <>
       <Flex w="full" gap={6} p={6} flexWrap="wrap">
@@ -42,6 +45,7 @@ export const ScheduleTables = () => {
                         onClick={() => remove(tableId)}>삭제</Button>
               </ButtonGroup>
             </Flex>
+            <ScheduleDndProvider>
             <ScheduleTable
               key={`schedule-table-${index}`}
               schedules={schedules}
@@ -52,10 +56,11 @@ export const ScheduleTables = () => {
                 [tableId]: prev[tableId].filter(schedule => schedule.day !== day || !schedule.range.includes(time))
               }))}
             />
+            </ScheduleDndProvider>
           </Stack>
         ))}
       </Flex>
-      <SearchDialog searchInfo={searchInfo} onClose={() => setSearchInfo(null)}/>
+      <SearchDialog searchInfo={searchInfo} onClose={closeSearchDialog}/>
     </>
   );
 }
