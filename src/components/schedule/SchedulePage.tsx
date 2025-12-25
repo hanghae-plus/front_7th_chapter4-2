@@ -6,8 +6,8 @@ import SearchDialog from '../search/SearchDialog.tsx';
 import ScheduleBoard from './ScheduleBoard.tsx';
 
 const SchedulePage = () => {
-  const { schedulesMap } = useScheduleContext();
-  const { setSchedulesMap } = useScheduleAction();
+  const schedulesMap = useScheduleContext();
+  const setSchedulesMap = useScheduleAction();
   const [searchInfo, setSearchInfo] = useState<{
     tableId: string;
     day?: string;

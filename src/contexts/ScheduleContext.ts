@@ -1,13 +1,8 @@
-import React, { createContext, useContext } from 'react';
+import { createContext, Dispatch, SetStateAction, useContext } from 'react';
 import { Schedule } from '../types/schedule.ts';
 
-interface ScheduleContextType {
-  schedulesMap: Record<string, Schedule[]>;
-}
-
-interface ScheduleActionType {
-  setSchedulesMap: React.Dispatch<React.SetStateAction<Record<string, Schedule[]>>>;
-}
+type ScheduleContextType = Record<string, Schedule[]>;
+type ScheduleActionType = Dispatch<SetStateAction<ScheduleContextType>>;
 
 export const ScheduleContext = createContext<ScheduleContextType | undefined>(undefined);
 export const ScheduleAction = createContext<ScheduleActionType | undefined>(undefined);

@@ -53,7 +53,7 @@ const fetchAllLectures = () =>
 
 // TODO: 이 컴포넌트에서 불필요한 연산이 발생하지 않도록 다양한 방식으로 시도해주세요.
 const SearchDialog = memo(({ searchInfo, onClose }: Props) => {
-  const { setSchedulesMap } = useScheduleAction();
+  const setSchedulesMap = useScheduleAction();
 
   const loaderWrapperRef = useRef<HTMLDivElement>(null);
   const loaderRef = useRef<HTMLDivElement>(null);

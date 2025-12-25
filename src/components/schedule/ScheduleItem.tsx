@@ -70,7 +70,7 @@ const ScheduleItem = memo(({ id, data, bg, onDeleteButtonClick }: ScheduleItemPr
           <Text fontSize="sm" fontWeight="bold">
             {lecture.title}
           </Text>
-          <Text fontSize="xs">{room}</Text>
+          {room && <Text fontSize="xs">{room}</Text>}
         </Box>
       </PopoverTrigger>
       <PopoverContent onClick={event => event.stopPropagation()}>

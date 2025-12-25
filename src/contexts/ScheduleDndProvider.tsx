@@ -40,7 +40,7 @@ function createSnapModifier(): Modifier {
 const modifiers = [createSnapModifier()];
 
 function ScheduleDndProvider({ children }: PropsWithChildren) {
-  const { setSchedulesMap } = useScheduleAction();
+  const setSchedulesMap = useScheduleAction();
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
