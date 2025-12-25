@@ -10,10 +10,24 @@ export default defineConfig({
     cssCodeSplit: true,
     // 소스맵 생성 비활성화 (프로덕션 빌드 크기 감소)
     sourcemap: false,
+    // 빌드 최적화
+    target: 'esnext',
+    // 압축 레벨 최적화
+    reportCompressedSize: false,
     rollupOptions: {
-      // Tree-shaking 최적화
+      // Tree-shaking 최적화 강화
       treeshake: {
-        moduleSideEffects: false,
+        moduleSideEffects: (id) => {
+          // node_modules는 side effect가 있을 수 있으므로 확인
+          if (id.includes('node_modules')) {
+            // 특정 라이브러리는 side effect가 있음
+            if (id.includes('@chakra-ui') || id.includes('@emotion')) {
+              return true;
+            }
+            return false;
+          }
+          return false;
+        },
       },
       output: {
         // 청크 파일명 최적화 (해시 사용으로 캐싱 개선)
@@ -24,8 +38,11 @@ export default defineConfig({
           // node_modules는 별도 청크로 분리
           if (id.includes('node_modules')) {
             // react와 react-dom을 분리하여 더 세밀한 캐싱
-            if (id.includes("react/") && !id.includes("react-dom")) {
+            if (id.includes("react/") && !id.includes("react-dom") && !id.includes("react/jsx")) {
               return "react-core";
+            }
+            if (id.includes("react/jsx-runtime") || id.includes("react/jsx-dev-runtime")) {
+              return "react-jsx";
             }
             if (id.includes("react-dom")) {
               return "react-dom";
@@ -65,10 +82,6 @@ export default defineConfig({
       },
     },
     chunkSizeWarningLimit: 1000,
-    // 빌드 최적화
-    target: 'esnext',
-    // 압축 레벨 최적화
-    reportCompressedSize: false,
   },
   esbuild: {
     // esbuild는 기본적으로 console.log를 제거하지 않으므로, 별도 설정 필요
@@ -82,6 +95,8 @@ export default defineConfig({
     treeShaking: true,
     // 글로벌 변수 최소화
     keepNames: false,
+    // Pure annotations 제거
+    pure: ['console.log', 'console.info', 'console.debug'],
   },
   // 최적화 설정
   optimizeDeps: {

@@ -48,15 +48,33 @@ const ScheduleTable = ({
 };
 
 // React.memo로 컴포넌트 메모이제이션하여 불필요한 리렌더링 방지
-// schedules 배열 참조가 같으면 리렌더링하지 않음 (핸들러 참조 변경은 무시)
+// schedules 배열 참조가 같거나, 각 schedule 객체의 참조가 모두 같으면 리렌더링하지 않음
 export default memo(ScheduleTable, (prevProps, nextProps) => {
-  // tableId와 schedules 배열 참조가 변경되지 않았으면 리렌더링 방지
-  // 핸들러 함수는 참조가 변경될 수 있지만, schedules가 같으면 리렌더링할 필요 없음
-  if (
-    prevProps.tableId === nextProps.tableId &&
-    prevProps.schedules === nextProps.schedules
-  ) {
-    return true; // props가 같으면 리렌더링 안 함
+  // tableId가 다르면 리렌더링
+  if (prevProps.tableId !== nextProps.tableId) {
+    return false;
   }
-  return false; // props가 다르면 리렌더링
+
+  // schedules 배열 참조가 같으면 리렌더링 안 함
+  if (prevProps.schedules === nextProps.schedules) {
+    return true;
+  }
+
+  // schedules 배열의 길이가 다르면 리렌더링
+  if (prevProps.schedules.length !== nextProps.schedules.length) {
+    return false;
+  }
+
+  // 각 schedule 객체의 참조를 비교
+  // 모든 schedule 객체의 참조가 같으면 리렌더링 안 함
+  // (updateScheduleOnDragEnd에서 변경되지 않은 schedule 객체의 참조를 유지하므로)
+  for (let i = 0; i < prevProps.schedules.length; i++) {
+    if (prevProps.schedules[i] !== nextProps.schedules[i]) {
+      // 하나라도 참조가 다르면 리렌더링
+      return false;
+    }
+  }
+
+  // 모든 schedule 객체의 참조가 같으면 리렌더링 안 함
+  return true;
 });

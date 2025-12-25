@@ -64,6 +64,23 @@ export const updateScheduleOnDragEnd = (
 
   // 해당 시간표만 독립적으로 업데이트
   // 다른 시간표는 전혀 영향을 받지 않음
+  
+  // 변경된 스케줄 계산
+  const newDay = DAY_LABELS[nowDayIndex + moveDayIndex];
+  const newRange = schedule.range.map((time) => time + moveTimeIndex);
+  
+  // 실제로 변경이 있는지 확인
+  const hasChanged = 
+    schedule.day !== newDay ||
+    schedule.range.length !== newRange.length ||
+    schedule.range.some((time, i) => time !== newRange[i]);
+  
+  // 변경이 없으면 기존 배열 참조 유지
+  if (!hasChanged) {
+    return currentSchedules;
+  }
+  
+  // 변경이 있으면 새 배열 생성 (변경되지 않은 스케줄은 기존 참조 유지)
   return currentSchedules.map((targetSchedule, targetIndex) => {
     if (targetIndex !== index) {
       // 변경되지 않은 스케줄은 기존 참조 유지
@@ -72,8 +89,8 @@ export const updateScheduleOnDragEnd = (
     // 변경된 스케줄만 새 객체로 생성
     return {
       ...targetSchedule,
-      day: DAY_LABELS[nowDayIndex + moveDayIndex],
-      range: targetSchedule.range.map((time) => time + moveTimeIndex),
+      day: newDay,
+      range: newRange,
     };
   });
 };
