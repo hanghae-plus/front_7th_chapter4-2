@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -126,7 +126,8 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     majors: [],
   });
 
-  const getFilteredLectures = () => {
+  // useMemo로 필터링 결과 메모이제이션
+  const filteredLectures = useMemo(() => {
     const { query = '', credits, grades, days, times, majors } = searchOptions;
     return lectures
       .filter(lecture =>
@@ -150,12 +151,14 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
         const schedules = lecture.schedule ? parseSchedule(lecture.schedule) : [];
         return schedules.some(s => s.range.some(time => times.includes(time)));
       });
-  }
+  }, [lectures, searchOptions]);
 
-  const filteredLectures = getFilteredLectures();
-  const lastPage = Math.ceil(filteredLectures.length / PAGE_SIZE);
-  const visibleLectures = filteredLectures.slice(0, page * PAGE_SIZE);
-  const allMajors = [...new Set(lectures.map(lecture => lecture.major))];
+  // 페이지 관련 값들도 메모이제이션
+  const lastPage = useMemo(() => Math.ceil(filteredLectures.length / PAGE_SIZE), [filteredLectures.length]);
+  const visibleLectures = useMemo(() => filteredLectures.slice(0, page * PAGE_SIZE), [filteredLectures, page]);
+
+  // 전공 목록 메모이제이션
+  const allMajors = useMemo(() => [...new Set(lectures.map(lecture => lecture.major))], [lectures]);
 
   const changeSearchOption = (field: keyof SearchOption, value: SearchOption[typeof field]) => {
     setPage(1);
