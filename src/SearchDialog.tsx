@@ -82,18 +82,33 @@ const TIME_SLOTS = [
 
 const PAGE_SIZE = 100;
 
-const fetchMajors = () => axios.get<Lecture[]>('/schedules-majors.json');
-const fetchLiberalArts = () => axios.get<Lecture[]>('/schedules-liberal-arts.json');
+// 클로저를 이용한 캐싱 구현
+const createCachedFetch = <T,>(fetcher: () => Promise<T>) => {
+  let cache: Promise<T> | null = null;
+  return () => {
+    if (!cache) {
+      cache = fetcher();
+    }
+    return cache;
+  };
+};
 
-// TODO: 이 코드를 개선해서 API 호출을 최소화 해보세요 + Promise.all이 현재 잘못 사용되고 있습니다. 같이 개선해주세요.
-const fetchAllLectures = async () => await Promise.all([
-  (console.log('API Call 1', performance.now()), await fetchMajors()),
-  (console.log('API Call 2', performance.now()), await fetchLiberalArts()),
-  (console.log('API Call 3', performance.now()), await fetchMajors()),
-  (console.log('API Call 4', performance.now()), await fetchLiberalArts()),
-  (console.log('API Call 5', performance.now()), await fetchMajors()),
-  (console.log('API Call 6', performance.now()), await fetchLiberalArts()),
-]);
+const fetchMajors = createCachedFetch(() => axios.get<Lecture[]>('/schedules-majors.json'));
+const fetchLiberalArts = createCachedFetch(() => axios.get<Lecture[]>('/schedules-liberal-arts.json'));
+
+// Promise.all을 올바르게 사용: 배열 내부에서 await를 제거하여 병렬로 실행
+const fetchAllLectures = async () => {
+  const promises = [
+    (console.log('API Call 1', performance.now()), fetchMajors()),
+    (console.log('API Call 2', performance.now()), fetchLiberalArts()),
+    (console.log('API Call 3', performance.now()), fetchMajors()),
+    (console.log('API Call 4', performance.now()), fetchLiberalArts()),
+    (console.log('API Call 5', performance.now()), fetchMajors()),
+    (console.log('API Call 6', performance.now()), fetchLiberalArts()),
+  ];
+
+  return await Promise.all(promises);
+};
 
 // TODO: 이 컴포넌트에서 불필요한 연산이 발생하지 않도록 다양한 방식으로 시도해주세요.
 const SearchDialog = ({ searchInfo, onClose }: Props) => {
