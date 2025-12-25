@@ -320,7 +320,7 @@ const fetchMajors = (() => {
 
     if (pending !== null) return pending;
 
-    pending = axios.get("/schedules-majors.json").then((response) => {
+    pending = axios.get(`${import.meta.env.BASE_URL}schedules-majors.json`).then((response) => {
       cache = response.data as Lecture[];
       pending = null;
       return cache;
@@ -341,7 +341,7 @@ const fetchLiberalArts = (() => {
 
     if (pending !== null) return pending;
 
-    pending = axios.get("/schedules-liberal-arts.json").then((response) => {
+    pending = axios.get(`${import.meta.env.BASE_URL}schedules-liberal-arts.json`).then((response) => {
       cache = response.data as Lecture[];
       pending = null;
       return cache;
