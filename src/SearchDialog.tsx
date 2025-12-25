@@ -20,7 +20,6 @@ import {
   Tag,
   TagCloseButton,
   TagLabel,
-  Tbody,
   Td,
   Text,
   Th,
@@ -35,6 +34,7 @@ import { parseSchedule } from "./utils.ts";
 import axios from "axios";
 import { DAY_LABELS } from "./constants.ts";
 import { query, useFetches } from "./hooks/useFetch.ts";
+import { VirtualScroll } from "./components/VirtualScroll.tsx";
 
 interface Props {
   searchInfo: {
@@ -419,8 +419,16 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
               </Table>
 
               <Box overflowY="auto" maxH="500px" ref={loaderWrapperRef}>
-                <Table size="sm" variant="striped">
-                  <Tbody>
+                <Table
+                  size="sm"
+                  variant="striped"
+                  style={{ position: "relative", height: "557px" }}>
+                  <VirtualScroll
+                    containerHeight={557}
+                    itemHeight={81}
+                    scrollContainerRef={
+                      loaderWrapperRef as React.RefObject<HTMLElement>
+                    }>
                     {visibleLectures.map((lecture, index) => (
                       <Tr key={`${lecture.id}-${index}`}>
                         <Td width="100px">{lecture.id}</Td>
@@ -445,7 +453,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
                         </Td>
                       </Tr>
                     ))}
-                  </Tbody>
+                  </VirtualScroll>
                 </Table>
                 <Box ref={loaderRef} h="20px" />
               </Box>
