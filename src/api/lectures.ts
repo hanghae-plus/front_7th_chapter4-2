@@ -11,8 +11,10 @@ const createCachedFetcher = <T>(url: string) => {
   };
 };
 
-export const fetchMajors = createCachedFetcher<Lecture[]>("/schedules-majors.json");
-export const fetchLiberalArts = createCachedFetcher<Lecture[]>("/schedules-liberal-arts.json");
+const baseUrl = import.meta.env.BASE_URL;
+
+export const fetchMajors = createCachedFetcher<Lecture[]>(`${baseUrl}schedules-majors.json`);
+export const fetchLiberalArts = createCachedFetcher<Lecture[]>(`${baseUrl}schedules-liberal-arts.json`);
 
 export const fetchAllLectures = () =>
   Promise.all([
