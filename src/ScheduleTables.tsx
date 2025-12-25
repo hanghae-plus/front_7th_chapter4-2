@@ -4,7 +4,14 @@ import { useScheduleContext } from "./ScheduleContext.tsx";
 import SearchDialog from "./SearchDialog.tsx";
 import { memo, useCallback, useMemo, useState } from "react";
 import { Schedule } from "./types.ts";
-import { DndContext, Modifier, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import {
+  DndContext,
+  DragEndEvent,
+  Modifier,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
 import { CellSize, DAY_LABELS } from "./constants.ts";
 
 function createSnapModifier(): Modifier {
@@ -68,7 +75,7 @@ const ScheduleTableItem = memo(
       timeInfo: { day: string; time: number }
     ) => void;
     onDeleteSchedule: (tableId: string, day: string, time: number) => void;
-    onDragEnd: (tableId: string, event: any) => void;
+    onDragEnd: (tableId: string, event: DragEndEvent) => void;
   }) => {
     const sensors = useSensors(
       useSensor(PointerSensor, {
@@ -134,7 +141,11 @@ const ScheduleTableItem = memo(
             </Button>
           </ButtonGroup>
         </Flex>
-        <DndContext sensors={sensors} onDragEnd={handleDragEnd} modifiers={modifiers}>
+        <DndContext
+          sensors={sensors}
+          onDragEnd={handleDragEnd}
+          modifiers={modifiers}
+        >
           <ScheduleTable
             schedules={schedules}
             tableId={tableId}
