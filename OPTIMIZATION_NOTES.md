@@ -625,3 +625,308 @@ function useQuery(options) {
 - 여러 컴포넌트에서 데이터 공유
 - 캐시 무효화/리프레시 필요
 - 프로덕션 수준의 안정성과 기능 필요
+
+---
+
+## 3. SearchDialog 컴포넌트 최적화 - 불필요한 재계산 방지 (useMemo 활용)
+
+### 문제점
+
+인피니트 스크롤을 사용하는 `SearchDialog` 컴포넌트에서 `page` 상태가 변경될 때마다 (스크롤할 때마다) 불필요한 검색 필터링 연산이 다시 실행되고 있었습니다.
+
+#### 기존 코드의 문제
+
+```typescript
+const getFilteredLectures = () => {
+  const { query = '', credits, grades, days, times, majors } = searchOptions;
+  return lectures
+    .filter(lecture =>
+      lecture.title.toLowerCase().includes(query.toLowerCase()) ||
+      lecture.id.toLowerCase().includes(query.toLowerCase())
+    )
+    // ... 여러 필터링 연산 ...
+  );
+}
+
+const filteredLectures = getFilteredLectures();  // 매 렌더링마다 실행!
+const lastPage = Math.ceil(filteredLectures.length / PAGE_SIZE);
+const visibleLectures = filteredLectures.slice(0, page * PAGE_SIZE);
+const allMajors = [...new Set(lectures.map(lecture => lecture.major))];  // 매 렌더링마다 실행!
+```
+
+**문제점:**
+
+1. **매 렌더링마다 필터링 연산 실행**
+   - `getFilteredLectures()` 함수가 컴포넌트가 렌더링될 때마다 호출됨
+   - `page` 상태가 변경될 때마다 (인피니트 스크롤) 전체 필터링이 다시 실행됨
+   - `searchOptions`나 `lectures`가 변경되지 않았는데도 불필요한 연산 발생
+
+2. **인피니트 스크롤 시 성능 저하**
+   - 사용자가 스크롤할 때마다 `setPage`가 호출됨
+   - `page` 상태 변경 → 컴포넌트 리렌더링 → `getFilteredLectures()` 다시 실행
+   - 수천 개의 강의 데이터를 매번 필터링하는 것은 비효율적
+
+3. **allMajors 계산도 매번 실행**
+   - `allMajors`는 `lectures`가 변경될 때만 다시 계산하면 되는데
+   - 매 렌더링마다 `Set` 생성과 배열 변환 연산이 실행됨
+
+#### 실행 흐름 예시
+
+**인피니트 스크롤 시나리오:**
+
+```
+1. 사용자가 스크롤 다운
+   ↓
+2. IntersectionObserver가 loader 감지
+   ↓
+3. setPage(prevPage => prevPage + 1) 호출
+   ↓
+4. 컴포넌트 리렌더링
+   ↓
+5. getFilteredLectures() 실행 (불필요!)
+   - searchOptions는 변경되지 않았는데도 전체 필터링 다시 수행
+   - 수천 개의 강의 데이터를 다시 필터링
+   ↓
+6. visibleLectures 계산
+   ↓
+7. 화면에 새로운 항목 표시
+```
+
+**문제:**
+- 4번 단계에서 `searchOptions`와 `lectures`가 변경되지 않았는데도 필터링이 다시 실행됨
+- 스크롤할 때마다 불필요한 연산이 발생하여 성능 저하
+
+### useMemo란 무엇인가?
+
+`useMemo`는 React의 훅으로, 의존성 배열의 값이 변경될 때만 메모이제이션된 값을 다시 계산합니다.
+
+#### 기본 사용법
+
+```typescript
+const memoizedValue = useMemo(() => {
+  // 비용이 큰 계산
+  return expensiveCalculation(a, b);
+}, [a, b]); // a나 b가 변경될 때만 다시 계산
+```
+
+**동작 원리:**
+1. 첫 번째 렌더링: 함수를 실행하여 결과를 계산하고 메모리에 저장
+2. 이후 렌더링: 의존성 배열의 값이 변경되지 않으면 저장된 값을 재사용
+3. 의존성 변경: 의존성 배열의 값이 변경되면 함수를 다시 실행하여 새로운 값 계산
+
+#### useMemo vs 일반 변수
+
+**일반 변수 (메모이제이션 없음):**
+```typescript
+const Component = () => {
+  const [count, setCount] = useState(0);
+  
+  // 매 렌더링마다 실행됨
+  const expensiveValue = expensiveCalculation();
+  
+  return <div>{expensiveValue}</div>;
+};
+```
+- `count`가 변경되어 리렌더링될 때마다 `expensiveCalculation()`이 다시 실행됨
+
+**useMemo 사용:**
+```typescript
+const Component = () => {
+  const [count, setCount] = useState(0);
+  const [otherValue, setOtherValue] = useState(0);
+  
+  // otherValue가 변경될 때만 다시 계산
+  const expensiveValue = useMemo(() => {
+    return expensiveCalculation();
+  }, [otherValue]);
+  
+  return <div>{expensiveValue}</div>;
+};
+```
+- `count`가 변경되어 리렌더링되어도 `otherValue`가 변경되지 않으면 저장된 값을 재사용
+- `otherValue`가 변경될 때만 다시 계산
+
+### 해결 방법: useMemo를 활용한 메모이제이션
+
+검색 필터링 결과와 관련 계산들을 `useMemo`로 메모이제이션하여 불필요한 재계산을 방지합니다.
+
+#### 수정된 코드
+
+```typescript
+// searchOptions나 lectures가 변경될 때만 필터링 수행
+const filteredLectures = useMemo(() => {
+  const { query = '', credits, grades, days, times, majors } = searchOptions;
+  return lectures
+    .filter(lecture =>
+      lecture.title.toLowerCase().includes(query.toLowerCase()) ||
+      lecture.id.toLowerCase().includes(query.toLowerCase())
+    )
+    .filter(lecture => grades.length === 0 || grades.includes(lecture.grade))
+    .filter(lecture => majors.length === 0 || majors.includes(lecture.major))
+    .filter(lecture => !credits || lecture.credits.startsWith(String(credits)))
+    .filter(lecture => {
+      if (days.length === 0) {
+        return true;
+      }
+      const schedules = lecture.schedule ? parseSchedule(lecture.schedule) : [];
+      return schedules.some(s => days.includes(s.day));
+    })
+    .filter(lecture => {
+      if (times.length === 0) {
+        return true;
+      }
+      const schedules = lecture.schedule ? parseSchedule(lecture.schedule) : [];
+      return schedules.some(s => s.range.some(time => times.includes(time)));
+    });
+}, [searchOptions, lectures]);
+
+// filteredLectures가 변경될 때만 계산
+const lastPage = useMemo(() => Math.ceil(filteredLectures.length / PAGE_SIZE), [filteredLectures.length]);
+
+// filteredLectures나 page가 변경될 때만 계산
+const visibleLectures = useMemo(() => filteredLectures.slice(0, page * PAGE_SIZE), [filteredLectures, page]);
+
+// lectures가 변경될 때만 계산
+const allMajors = useMemo(() => [...new Set(lectures.map(lecture => lecture.major))], [lectures]);
+```
+
+**핵심 변경사항:**
+
+1. **`filteredLectures` 메모이제이션**
+   - `searchOptions`나 `lectures`가 변경될 때만 필터링 수행
+   - `page`가 변경되어도 `searchOptions`와 `lectures`가 같으면 재사용
+
+2. **`lastPage` 메모이제이션**
+   - `filteredLectures.length`가 변경될 때만 계산
+   - `page`가 변경되어도 `filteredLectures`가 같으면 재사용
+
+3. **`visibleLectures` 메모이제이션**
+   - `filteredLectures`나 `page`가 변경될 때만 계산
+   - `page`가 변경되면 새로운 슬라이스 계산 (필요한 연산)
+
+4. **`allMajors` 메모이제이션**
+   - `lectures`가 변경될 때만 계산
+   - 검색 옵션 변경 시에도 재사용
+
+#### 개선된 실행 흐름
+
+**인피니트 스크롤 시나리오 (개선 후):**
+
+```
+1. 사용자가 스크롤 다운
+   ↓
+2. IntersectionObserver가 loader 감지
+   ↓
+3. setPage(prevPage => prevPage + 1) 호출
+   ↓
+4. 컴포넌트 리렌더링
+   ↓
+5. useMemo 체크:
+   - searchOptions: 변경 없음 ✓
+   - lectures: 변경 없음 ✓
+   → filteredLectures 재사용 (계산 생략!)
+   ↓
+6. useMemo 체크:
+   - filteredLectures.length: 변경 없음 ✓
+   → lastPage 재사용 (계산 생략!)
+   ↓
+7. useMemo 체크:
+   - filteredLectures: 변경 없음 ✓
+   - page: 변경됨 ✗
+   → visibleLectures 새로 계산 (필요한 연산만 수행)
+   ↓
+8. 화면에 새로운 항목 표시
+```
+
+**개선 효과:**
+- 불필요한 필터링 연산 제거 (수천 개의 강의 데이터를 다시 필터링하지 않음)
+- 필요한 연산만 수행 (`visibleLectures` 슬라이싱만 수행)
+- 스크롤 시 성능 향상
+
+### 추가 개선: changeSearchOption 함수 최적화
+
+기존 코드에서 `changeSearchOption` 함수가 클로저 문제를 가지고 있었습니다:
+
+```typescript
+// ❌ 문제가 있는 코드
+const changeSearchOption = (field: keyof SearchOption, value: SearchOption[typeof field]) => {
+  setPage(1);
+  setSearchOptions(({ ...searchOptions, [field]: value })); // 클로저 문제!
+  loaderWrapperRef.current?.scrollTo(0, 0);
+};
+```
+
+**문제점:**
+- `searchOptions`를 직접 참조하여 클로저 문제 발생 가능
+- 이전 상태를 참조할 수 있어 예상치 못한 동작 가능
+
+**개선된 코드:**
+```typescript
+// ✅ 함수형 업데이트 사용
+const changeSearchOption = (field: keyof SearchOption, value: SearchOption[typeof field]) => {
+  setPage(1);
+  setSearchOptions(prev => ({ ...prev, [field]: value })); // 최신 상태 보장
+  loaderWrapperRef.current?.scrollTo(0, 0);
+};
+```
+
+**개선 효과:**
+- 함수형 업데이트로 최신 상태 보장
+- 클로저 문제 해결
+- 더 안전한 상태 업데이트
+
+### 개선 효과
+
+#### 성능 개선
+
+**기존 (메모이제이션 없음):**
+- 인피니트 스크롤 시마다 전체 필터링 연산 실행
+- 수천 개의 강의 데이터를 매번 필터링
+- 불필요한 `Set` 생성과 배열 변환 연산
+
+**개선 후 (useMemo 적용):**
+- `searchOptions`나 `lectures`가 변경될 때만 필터링 수행
+- 인피니트 스크롤 시에는 필요한 슬라이싱만 수행
+- 불필요한 연산 제거로 성능 향상
+
+#### 메모리 효율성
+
+- `useMemo`는 의존성이 변경되지 않으면 이전 결과를 재사용
+- 불필요한 객체 생성 방지
+- 메모리 사용량 최적화
+
+### 학습 내용
+
+1. **useMemo의 활용**
+   - 비용이 큰 계산을 메모이제이션하여 불필요한 재계산 방지
+   - 의존성 배열을 정확히 지정하여 필요한 경우에만 재계산
+   - 인피니트 스크롤 같은 빈번한 상태 변경 시 성능 향상
+
+2. **의존성 배열의 중요성**
+   - 의존성 배열에 실제로 사용하는 값만 포함
+   - 불필요한 의존성은 오히려 성능 저하를 유발할 수 있음
+   - 예: `filteredLectures.length`만 의존성으로 사용 (객체 참조가 아닌 값)
+
+3. **함수형 업데이트 패턴**
+   - `setState(prev => ...)` 패턴으로 최신 상태 보장
+   - 클로저 문제 해결
+   - 더 안전한 상태 관리
+
+4. **성능 최적화 전략**
+   - 불필요한 연산 식별
+   - 적절한 메모이제이션 적용
+   - 실제 성능 개선 확인
+
+### 주의사항
+
+1. **과도한 메모이제이션 지양**
+   - 간단한 계산은 메모이제이션 오버헤드가 더 클 수 있음
+   - 비용이 큰 계산에만 `useMemo` 사용
+
+2. **의존성 배열 관리**
+   - 의존성 배열을 정확히 지정하지 않으면 버그 발생 가능
+   - ESLint의 `exhaustive-deps` 규칙 활용 권장
+
+3. **메모리 사용**
+   - `useMemo`는 이전 값을 메모리에 저장하므로 메모리 사용량 증가
+   - 하지만 일반적으로 성능 향상이 메모리 사용량 증가보다 유리함
