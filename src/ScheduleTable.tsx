@@ -11,13 +11,13 @@ import {
   PopoverContent,
   PopoverTrigger,
   Text,
-} from "@chakra-ui/react";
-import { CellSize, DAY_LABELS, 분 } from "./constants.ts";
-import { Schedule } from "./types.ts";
-import { fill2, parseHnM } from "./utils.ts";
-import { useDndContext, useDraggable } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
-import { ComponentProps, Fragment, memo, useCallback, useMemo } from "react";
+} from '@chakra-ui/react';
+import { CellSize, DAY_LABELS, 분 } from './constants.ts';
+import { Schedule } from './types.ts';
+import { fill2, parseHnM } from './utils.ts';
+import { useDndContext, useDraggable } from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
+import { ComponentProps, Fragment, memo, useCallback, useMemo } from 'react';
 interface Props {
   tableId: string;
   schedules: Schedule[];
@@ -48,25 +48,27 @@ interface OutlineWrapperProps {
   children: React.ReactNode;
 }
 
-const DragHighlightWrapper = memo(({ tableId, children }: OutlineWrapperProps) => {
-  const { active } = useDndContext();
+const DragHighlightWrapper = memo(
+  ({ tableId, children }: OutlineWrapperProps) => {
+    const { active } = useDndContext();
 
-  const isCurrentTableDragging = useMemo(() => {
-    if (!active?.id) return false;
-    const [draggedTableId] = String(active.id).split(":");
-    return draggedTableId === tableId;
-  }, [active?.id, tableId]);
+    const isCurrentTableDragging = useMemo(() => {
+      if (!active?.id) return false;
+      const [draggedTableId] = String(active.id).split(':');
+      return draggedTableId === tableId;
+    }, [active?.id, tableId]);
 
-  return (
-    <Box
-      position="relative"
-      outline={isCurrentTableDragging ? "5px dashed" : undefined}
-      outlineColor="blue.300"
-    >
-      {children}
-    </Box>
-  );
-});
+    return (
+      <Box
+        position="relative"
+        outline={isCurrentTableDragging ? '5px dashed' : undefined}
+        outlineColor="blue.300"
+      >
+        {children}
+      </Box>
+    );
+  }
+);
 
 const StaticTableGrid = memo(({ onCellClick }: GridProps) => (
   <Grid
@@ -95,7 +97,7 @@ const StaticTableGrid = memo(({ onCellClick }: GridProps) => (
         <GridItem
           borderTop="1px solid"
           borderColor="gray.300"
-          bg={idx >= 18 ? "gray.200" : "gray.100"}
+          bg={idx >= 18 ? 'gray.200' : 'gray.100'}
         >
           <Flex justifyContent="center" alignItems="center" h="full">
             <Text fontSize="xs">
@@ -108,9 +110,9 @@ const StaticTableGrid = memo(({ onCellClick }: GridProps) => (
             key={`${day}-${idx}`}
             borderWidth="1px 0 0 1px"
             borderColor="gray.300"
-            bg={idx >= 18 ? "gray.100" : "white"}
+            bg={idx >= 18 ? 'gray.100' : 'white'}
             cursor="pointer"
-            _hover={{ bg: "yellow.100" }}
+            _hover={{ bg: 'yellow.100' }}
             onClick={() => onCellClick?.({ day, time: idx + 1 })}
           />
         ))}
@@ -120,95 +122,102 @@ const StaticTableGrid = memo(({ onCellClick }: GridProps) => (
 ));
 
 // 메인 ScheduleTable 컴포넌트 - memo로 래핑하여 불필요한 리렌더링 방지
-const ScheduleTable = memo(({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
+const ScheduleTable = memo(
+  ({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
+    // 강의 ID별 색상 맵 생성
+    const colorByLectureId = useMemo(() => {
+      const uniqueIds = [...new Set(schedules.map((s) => s.lecture.id))];
+      const palette = ['#fdd', '#ffd', '#dff', '#ddf', '#fdf', '#dfd'];
+      const mapping: Record<string, string> = {};
+      uniqueIds.forEach((id, i) => {
+        mapping[id] = palette[i % palette.length];
+      });
+      return mapping;
+    }, [schedules]);
 
-  // 강의 ID별 색상 맵 생성
-  const colorByLectureId = useMemo(() => {
-    const uniqueIds = [...new Set(schedules.map((s) => s.lecture.id))];
-    const palette = ["#fdd", "#ffd", "#dff", "#ddf", "#fdf", "#dfd"];
-    const mapping: Record<string, string> = {};
-    uniqueIds.forEach((id, i) => {
-      mapping[id] = palette[i % palette.length];
-    });
-    return mapping;
-  }, [schedules]);
+    const resolveColor = useCallback(
+      (lectureId: string) => colorByLectureId[lectureId] ?? '#fff',
+      [colorByLectureId]
+    );
 
-  const resolveColor = useCallback(
-    (lectureId: string) => colorByLectureId[lectureId] ?? "#fff",
-    [colorByLectureId]
-  );
+    return (
+      <DragHighlightWrapper tableId={tableId}>
+        <StaticTableGrid onCellClick={onScheduleTimeClick} />
 
-  return (
-    <DragHighlightWrapper tableId={tableId}>
-      <StaticTableGrid onCellClick={onScheduleTimeClick} />
-
-      {schedules.map((schedule, idx) => (
-        <DraggableSchedule
-          key={`${schedule.lecture.id}-${idx}`}
-          id={`${tableId}:${idx}`}
-          data={schedule}
-          bg={resolveColor(schedule.lecture.id)}
-          onDeleteButtonClick={onDeleteButtonClick}
-        />
-      ))}
-    </DragHighlightWrapper>
-  );
-});
+        {schedules.map((schedule, idx) => (
+          <DraggableSchedule
+            key={`${schedule.lecture.id}-${idx}`}
+            id={`${tableId}:${idx}`}
+            data={schedule}
+            bg={resolveColor(schedule.lecture.id)}
+            onDeleteButtonClick={onDeleteButtonClick}
+          />
+        ))}
+      </DragHighlightWrapper>
+    );
+  }
+);
 
 // React.memo로 메모이제이션하여 드래그 시 불필요한 리렌더링 방지
-const DraggableSchedule = memo(({
- id,
- data,
- bg,
- onDeleteButtonClick
-}: { id: string; data: Schedule } & ComponentProps<typeof Box> & {
-  onDeleteButtonClick?: (timeInfo: { day: string, time: number }) => void
-}) => {
-  const { day, range, room, lecture } = data;
-  const { attributes, setNodeRef, listeners, transform } = useDraggable({ id });
-  const leftIndex = DAY_LABELS.indexOf(day as typeof DAY_LABELS[number]);
-  const topIndex = range[0] - 1;
-  const size = range.length;
+const DraggableSchedule = memo(
+  ({
+    id,
+    data,
+    bg,
+    onDeleteButtonClick,
+  }: { id: string; data: Schedule } & ComponentProps<typeof Box> & {
+      onDeleteButtonClick?: (timeInfo: { day: string; time: number }) => void;
+    }) => {
+    const { day, range, room, lecture } = data;
+    const { attributes, setNodeRef, listeners, transform } = useDraggable({
+      id,
+    });
+    const leftIndex = DAY_LABELS.indexOf(day as (typeof DAY_LABELS)[number]);
+    const topIndex = range[0] - 1;
+    const size = range.length;
 
-  // 삭제 핸들러를 useCallback으로 메모이제이션
-  const handleDelete = useCallback(() => {
-    onDeleteButtonClick?.({ day, time: range[0] });
-  }, [onDeleteButtonClick, day, range]);
+    // 삭제 핸들러를 useCallback으로 메모이제이션
+    const handleDelete = useCallback(() => {
+      onDeleteButtonClick?.({ day, time: range[0] });
+    }, [onDeleteButtonClick, day, range]);
 
-  return (
-    <Popover>
-      <PopoverTrigger>
-        <Box
-          position="absolute"
-          left={`${120 + (CellSize.WIDTH * leftIndex) + 1}px`}
-          top={`${40 + (topIndex * CellSize.HEIGHT + 1)}px`}
-          width={(CellSize.WIDTH - 1) + "px"}
-          height={(CellSize.HEIGHT * size - 1) + "px"}
-          bg={bg}
-          p={1}
-          boxSizing="border-box"
-          cursor="pointer"
-          ref={setNodeRef}
-          transform={CSS.Translate.toString(transform)}
-          {...listeners}
-          {...attributes}
-        >
-          <Text fontSize="sm" fontWeight="bold">{lecture.title}</Text>
-          <Text fontSize="xs">{room}</Text>
-        </Box>
-      </PopoverTrigger>
-      <PopoverContent onClick={event => event.stopPropagation()}>
-        <PopoverArrow/>
-        <PopoverCloseButton/>
-        <PopoverBody>
-          <Text>강의를 삭제하시겠습니까?</Text>
-          <Button colorScheme="red" size="xs" onClick={handleDelete}>
-            삭제
-          </Button>
-        </PopoverBody>
-      </PopoverContent>
-    </Popover>
-  );
-});
+    return (
+      <Popover>
+        <PopoverTrigger>
+          <Box
+            position="absolute"
+            left={`${120 + CellSize.WIDTH * leftIndex + 1}px`}
+            top={`${40 + (topIndex * CellSize.HEIGHT + 1)}px`}
+            width={CellSize.WIDTH - 1 + 'px'}
+            height={CellSize.HEIGHT * size - 1 + 'px'}
+            bg={bg}
+            p={1}
+            boxSizing="border-box"
+            cursor="pointer"
+            ref={setNodeRef}
+            transform={CSS.Translate.toString(transform)}
+            {...listeners}
+            {...attributes}
+          >
+            <Text fontSize="sm" fontWeight="bold">
+              {lecture.title}
+            </Text>
+            <Text fontSize="xs">{room}</Text>
+          </Box>
+        </PopoverTrigger>
+        <PopoverContent onClick={(event) => event.stopPropagation()}>
+          <PopoverArrow />
+          <PopoverCloseButton />
+          <PopoverBody>
+            <Text>강의를 삭제하시겠습니까?</Text>
+            <Button colorScheme="red" size="xs" onClick={handleDelete}>
+              삭제
+            </Button>
+          </PopoverBody>
+        </PopoverContent>
+      </Popover>
+    );
+  }
+);
 
 export default ScheduleTable;
