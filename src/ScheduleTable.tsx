@@ -18,6 +18,7 @@ import { fill2, parseHnM } from './utils.ts';
 import { useDndContext, useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { ComponentProps, Fragment, memo, ReactNode } from 'react';
+import { useAutoCallback } from './useAutoCallback.ts';
 
 interface Props {
   tableId: string;
@@ -136,11 +137,11 @@ const ScheduleTable = ({
   onScheduleTimeClick,
   onDeleteButtonClick,
 }: Props) => {
-  const getColor = (lectureId: string): string => {
+  const getColor = useAutoCallback((lectureId: string): string => {
     const lectures = [...new Set(schedules.map(({ lecture }) => lecture.id))];
     const colors = ['#fdd', '#ffd', '#dff', '#ddf', '#fdf', '#dfd'];
     return colors[lectures.indexOf(lectureId) % colors.length];
-  };
+  });
 
   return (
     <ScheduleTableWrapper tableId={tableId}>
@@ -162,6 +163,17 @@ const ScheduleTable = ({
     </ScheduleTableWrapper>
   );
 };
+
+const ScheduleContent = memo(
+  ({ title, room }: { title: string; room?: string }) => (
+    <>
+      <Text fontSize="sm" fontWeight="bold">
+        {title}
+      </Text>
+      <Text fontSize="xs">{room}</Text>
+    </>
+  )
+);
 
 const DraggableSchedule = memo(
   ({
@@ -198,10 +210,7 @@ const DraggableSchedule = memo(
             {...listeners}
             {...attributes}
           >
-            <Text fontSize="sm" fontWeight="bold">
-              {lecture.title}
-            </Text>
-            <Text fontSize="xs">{room}</Text>
+            <ScheduleContent title={lecture.title} room={room} />
           </Box>
         </PopoverTrigger>
         <PopoverContent onClick={event => event.stopPropagation()}>
