@@ -21,7 +21,7 @@ const ScheduleTableBox = memo(
     setSearchInfo: (info: { tableId: string }) => void;
     disabledRemoveButton: boolean;
   }) => {
-    const { setSchedulesMap } = useSetScheduleContext();
+    const setSchedulesMap = useSetScheduleContext();
 
     const duplicate = (targetId: string) => {
       setSchedulesMap((prev: Record<string, Schedule[]>) => ({
@@ -86,7 +86,7 @@ const ScheduleTableBox = memo(
 );
 
 export const ScheduleTables = () => {
-  const { schedulesMap } = useScheduleContext();
+  const schedulesMap = useScheduleContext();
 
   const [searchInfo, setSearchInfo] = useState<{
     tableId: string;
