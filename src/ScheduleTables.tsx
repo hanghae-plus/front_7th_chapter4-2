@@ -29,11 +29,7 @@ export const ScheduleTables = () => {
     });
   };
 
-  console.log(schedulesMap);
-
   const dndContext = useDndContext();
-
-  console.log(dndContext);
 
   const getActiveTableId = () => {
     const activeId = dndContext.active?.id;
