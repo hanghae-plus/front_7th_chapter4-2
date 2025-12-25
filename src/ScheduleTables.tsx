@@ -112,7 +112,7 @@ export const ScheduleTables = () => {
           );
         })}
       </Flex>
-      <SearchDialog searchInfo={searchInfo} onClose={() => setSearchInfo(null)} />
+      {searchInfo && <SearchDialog searchInfo={searchInfo} onClose={() => setSearchInfo(null)} />}
     </>
   );
 };
