@@ -137,8 +137,14 @@ const createCachedFetch = () => {
 
 const cachedFetch = createCachedFetch();
 
-const fetchMajors = () => cachedFetch('/schedules-majors.json');
-const fetchLiberalArts = () => cachedFetch('/schedules-liberal-arts.json');
+// base URL을 포함한 경로 생성 (프로덕션 환경에서 base path 지원)
+const getJsonPath = (path: string) => {
+  // 현재 문서의 base URI를 사용하여 상대 경로를 절대 경로로 변환
+  return new URL(path, document.baseURI).pathname;
+};
+
+const fetchMajors = () => cachedFetch(getJsonPath('schedules-majors.json'));
+const fetchLiberalArts = () => cachedFetch(getJsonPath('schedules-liberal-arts.json'));
 
 // Promise.all에서 await 제거하여 병렬 실행, 캐시로 인해 중복 호출 방지
 const fetchAllLectures = async () => {
