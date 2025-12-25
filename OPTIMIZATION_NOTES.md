@@ -1319,3 +1319,108 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
    - 최적화 전후 성능 측정
    - React DevTools Profiler 활용
    - 실제 성능 개선 확인
+
+---
+
+## 5. 지연평가(Lazy Evaluation) 학습
+
+### 지연평가란?
+
+**지연평가(Lazy Evaluation)**는 값이 실제로 필요할 때까지 계산을 미루는 평가 전략입니다.
+
+#### 즉시 평가 vs 지연평가
+
+**즉시 평가 (Eager Evaluation):**
+```typescript
+const numbers = [1, 2, 3, 4, 5];
+const doubled = numbers.map(n => n * 2); // 즉시 모든 요소를 변환
+// doubled = [2, 4, 6, 8, 10] (모두 생성됨)
+
+const first = doubled[0]; // 첫 번째만 필요한데 모두 생성했음
+```
+
+**지연평가 (Lazy Evaluation):**
+```typescript
+function* doubleGenerator(numbers: number[]) {
+  for (const n of numbers) {
+    yield n * 2; // 필요할 때만 생성
+  }
+}
+
+const doubled = doubleGenerator([1, 2, 3, 4, 5]);
+const first = doubled.next().value; // 첫 번째만 생성됨
+```
+
+**차이점:**
+- **즉시 평가**: 모든 값을 미리 계산하여 배열 생성
+- **지연평가**: 필요한 값만 필요할 때 생성
+
+### Generator 함수란?
+
+**Generator 함수**는 `function*` 문법을 사용하여 여러 값을 반환할 수 있는 함수입니다.
+
+```typescript
+function* numberGenerator() {
+  yield 1;
+  yield 2;
+  yield 3;
+}
+
+const gen = numberGenerator();
+console.log(gen.next().value); // 1
+console.log(gen.next().value); // 2
+console.log(gen.next().value); // 3
+```
+
+**특징:**
+- `yield` 키워드로 값을 반환
+- `next()`를 호출할 때마다 다음 값 생성
+- 필요한 개수만큼만 생성 가능
+- 메모리 효율적
+
+
+### 활용 예시 (학습용)
+
+지연평가를 적용한다면, 필터링된 결과를 Generator로 생성하여 필요한 개수만큼만 처리할 수 있습니다.
+
+```typescript
+// Generator 함수: 필요한 개수만큼만 필터링하여 생성
+function* getFilteredLecturesGenerator(
+  options: SearchOption, 
+  source: Lecture[], 
+  maxCount: number
+) {
+  let count = 0;
+  for (const lecture of source) {
+    if (count >= maxCount) break; // 필요한 개수만큼만 생성
+    if (matchesFilter(lecture, options)) {
+      yield lecture; // 조건을 만족하는 항목만 생성
+      count++;
+    }
+  }
+}
+
+// 필요한 개수만큼만 필터링하여 생성
+const visibleLectures = useMemo(() => {
+  const neededCount = page * PAGE_SIZE; // 예: 100개
+  const generator = getFilteredLecturesGenerator(searchOptions, lectures, neededCount);
+  return Array.from(generator); // 필요한 개수만큼만 배열로 변환
+}, [searchOptions, lectures, page]);
+```
+
+**핵심:**
+- 필요한 개수만큼만 생성하여 메모리 절약
+- 전체 결과를 생성하지 않음
+- 대용량 데이터 처리에 효과적
+
+### 이론적 효과
+
+- **메모리 효율성**: 필요한 개수만 생성하여 메모리 절약 (예: 3000개 → 100개)
+- **CPU 시간 절약**: 필요한 개수만큼만 필터링하여 시간 단축
+- **대용량 데이터 처리**: 특히 효과적
+
+### 주의사항
+
+- Generator는 한 번만 순회 가능 (다시 생성 필요)
+- 작은 데이터셋에서는 오버헤드가 더 클 수 있음
+- 현재 프로젝트에서는 React.memo와 useCallback으로 충분한 성능 향상을 달성했으므로 지연평가는 적용하지 않음
