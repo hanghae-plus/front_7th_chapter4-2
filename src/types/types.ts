@@ -1,4 +1,4 @@
-import type { DayLabel } from "./constants.ts";
+import type { DayLabel } from "../constants/constants.ts";
 export type { DayLabel };
 
 export interface Lecture {

@@ -1,9 +1,9 @@
 import { Button, ButtonGroup, Flex, Heading, Stack } from "@chakra-ui/react";
 import ScheduleTable from "./ScheduleTable.tsx";
-import { useScheduleContext } from "./ScheduleContext.tsx";
+import { useScheduleContext } from "../contexts/ScheduleContext.tsx";
 import SearchDialog from "./SearchDialog.tsx";
 import { useState, useCallback, useMemo, memo } from "react";
-import { Schedule, TimeInfo, DayLabel } from "./types.ts";
+import { Schedule, TimeInfo, DayLabel } from "../types/types.ts";
 
 // 각 테이블의 schedules를 개별적으로 메모이제이션하는 컴포넌트
 const MemoizedScheduleTableItem = memo(({ 

@@ -1,4 +1,4 @@
-import { ParsedScheduleItem } from "./types.ts";
+import { ParsedScheduleItem } from "../types/types.ts";
 
 export const fill2 = (n: number): string => `0${n}`.substr(-2);
 

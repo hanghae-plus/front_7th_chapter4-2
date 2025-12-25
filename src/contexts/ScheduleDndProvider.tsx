@@ -1,6 +1,6 @@
 import { DndContext, DragStartEvent, DragEndEvent, Modifier, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { PropsWithChildren, useCallback, useMemo, useState, createContext, useContext, memo } from "react";
-import { CellSize, DAY_LABELS, DayLabel } from "./constants.ts";
+import { CellSize, DAY_LABELS, DayLabel } from "../constants/constants.ts";
 import { useScheduleContext } from "./ScheduleContext.tsx";
 
 // 드래그 중인 테이블 ID만 관리하는 컨텍스트
