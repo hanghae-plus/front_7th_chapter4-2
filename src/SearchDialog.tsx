@@ -85,15 +85,18 @@ const PAGE_SIZE = 100;
 const fetchMajors = () => axios.get<Lecture[]>('/schedules-majors.json');
 const fetchLiberalArts = () => axios.get<Lecture[]>('/schedules-liberal-arts.json');
 
-// TODO: 이 코드를 개선해서 API 호출을 최소화 해보세요 + Promise.all이 현재 잘못 사용되고 있습니다. 같이 개선해주세요.
-const fetchAllLectures = async () => await Promise.all([
-  (console.log('API Call 1', performance.now()), await fetchMajors()),
-  (console.log('API Call 2', performance.now()), await fetchLiberalArts()),
-  (console.log('API Call 3', performance.now()), await fetchMajors()),
-  (console.log('API Call 4', performance.now()), await fetchLiberalArts()),
-  (console.log('API Call 5', performance.now()), await fetchMajors()),
-  (console.log('API Call 6', performance.now()), await fetchLiberalArts()),
-]);
+// 병렬 실행 최적화: Promise.all에 Promise 객체를 직접 전달하여 병렬 실행되도록 수정
+// TODO: 중복 API 호출 문제는 다음 단계에서 캐시를 통해 해결 예정
+const fetchAllLectures = async () => {
+  return Promise.all([
+    (console.log('API Call 1', performance.now()), fetchMajors()),
+    (console.log('API Call 2', performance.now()), fetchLiberalArts()),
+    (console.log('API Call 3', performance.now()), fetchMajors()),
+    (console.log('API Call 4', performance.now()), fetchLiberalArts()),
+    (console.log('API Call 5', performance.now()), fetchMajors()),
+    (console.log('API Call 6', performance.now()), fetchLiberalArts()),
+  ]);
+};
 
 // LectureRow: 테이블의 각 행을 렌더링하는 컴포넌트
 interface LectureRowProps {
