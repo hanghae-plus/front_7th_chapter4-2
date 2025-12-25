@@ -8,6 +8,7 @@ import {
   PopoverContent,
   PopoverTrigger,
   Text,
+  useDisclosure,
 } from '@chakra-ui/react';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
@@ -15,6 +16,7 @@ import { ComponentProps, memo, useMemo } from 'react';
 import { DAY_LABELS } from '../../constants/common';
 import { CellSize } from '../../constants/schedule';
 import { Schedule } from '../../types/schedule';
+import ScheduleText from './ScheduleText';
 
 interface ScheduleItemProps extends Omit<ComponentProps<typeof Box>, 'children'> {
   id: string;
@@ -23,6 +25,7 @@ interface ScheduleItemProps extends Omit<ComponentProps<typeof Box>, 'children'>
 }
 
 const ScheduleItem = memo(({ id, data, bg, onDeleteButtonClick }: ScheduleItemProps) => {
+  const { isOpen, onToggle, onClose } = useDisclosure();
   const { day, range, room, lecture } = data;
   const { attributes, setNodeRef, listeners, transform } = useDraggable({ id });
   const leftIndex = DAY_LABELS.indexOf(day as (typeof DAY_LABELS)[number]);
@@ -49,30 +52,30 @@ const ScheduleItem = memo(({ id, data, bg, onDeleteButtonClick }: ScheduleItemPr
       time: range[0],
     });
 
-  return (
-    <Popover isLazy lazyBehavior="unmount">
-      <PopoverTrigger>
-        <Box
-          position="absolute"
-          left={positionStyles.left}
-          top={positionStyles.top}
-          width={positionStyles.width}
-          height={positionStyles.height}
-          bg={bg}
-          p={1}
-          boxSizing="border-box"
-          cursor="pointer"
-          ref={setNodeRef}
-          transform={transformString}
-          {...listeners}
-          {...attributes}
-        >
-          <Text fontSize="sm" fontWeight="bold">
-            {lecture.title}
-          </Text>
-          {room && <Text fontSize="xs">{room}</Text>}
-        </Box>
-      </PopoverTrigger>
+  const content = (
+    <Box
+      position="absolute"
+      left={positionStyles.left}
+      top={positionStyles.top}
+      width={positionStyles.width}
+      height={positionStyles.height}
+      bg={bg}
+      p={1}
+      boxSizing="border-box"
+      cursor="pointer"
+      ref={setNodeRef}
+      transform={transformString}
+      {...listeners}
+      {...attributes}
+      onClick={onToggle}
+    >
+      <ScheduleText title={lecture.title} room={room} />
+    </Box>
+  );
+
+  return isOpen ? (
+    <Popover isOpen={isOpen} onClose={onClose} isLazy lazyBehavior="unmount">
+      <PopoverTrigger>{content}</PopoverTrigger>
       <PopoverContent onClick={event => event.stopPropagation()}>
         <PopoverArrow />
         <PopoverCloseButton />
@@ -84,6 +87,8 @@ const ScheduleItem = memo(({ id, data, bg, onDeleteButtonClick }: ScheduleItemPr
         </PopoverBody>
       </PopoverContent>
     </Popover>
+  ) : (
+    content
   );
 });
 
