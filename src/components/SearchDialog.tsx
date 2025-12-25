@@ -92,8 +92,8 @@ const createCachedFetch = (url: string) => {
   };
 };
 
-const fetchMajors = createCachedFetch("/schedules-majors.json");
-const fetchLiberalArts = createCachedFetch("/schedules-liberal-arts.json");
+const fetchMajors = createCachedFetch(`${import.meta.env.BASE_URL}schedules-majors.json`);
+const fetchLiberalArts = createCachedFetch(`${import.meta.env.BASE_URL}schedules-liberal-arts.json`);
 
 // TODO: 이 코드를 개선해서 API 호출을 최소화 해보세요 + Promise.all이 현재 잘못 사용되고 있습니다. 같이 개선해주세요.
 const fetchAllLectures = async () =>
