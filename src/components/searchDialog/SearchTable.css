@@ -1,0 +1,89 @@
+.search-table-header th {
+  font-family: var(--chakra-fonts-heading);
+  font-weight: var(--chakra-fontWeights-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--chakra-letterSpacings-wider);
+  text-align: start;
+  padding-inline-start: var(--chakra-space-6);
+  padding-inline-end: var(--chakra-space-6);
+  padding-top: var(--chakra-space-3);
+  padding-bottom: var(--chakra-space-3);
+  line-height: var(--chakra-lineHeights-4);
+  font-size: var(--chakra-fontSizes-xs);
+  color: var(--chakra-colors-gray-600);
+  border-bottom: 1px solid var(--chakra-colors-gray-100);
+}
+
+.search-table-body tr td {
+  text-align: start;
+  padding-inline-start: var(--chakra-space-4);
+  padding-inline-end: var(--chakra-space-4);
+  padding-top: var(--chakra-space-2);
+  padding-bottom: var(--chakra-space-2);
+  font-size: var(--chakra-fontSizes-sm);
+  line-height: var(--chakra-lineHeights-4);
+  border-bottom: var(--chakra-borders-1px);
+  border-color: var(--chakra-colors-gray-100);
+}
+
+.search-table-body tr:nth-of-type(odd) th,
+.search-table-body tr:nth-of-type(odd) td {
+  border-bottom: 1px solid var(--chakra-colors-gray-100);
+}
+
+.search-table-body tr:nth-of-type(odd) td {
+  background-color: var(--chakra-colors-gray-100);
+}
+
+.w-100px {
+  width: 100px;
+}
+.w-50px {
+  width: 50px;
+}
+.w-200px {
+  width: 200px;
+}
+.w-50px {
+  width: 50px;
+}
+.w-150px {
+  width: 150px;
+}
+.w-150px {
+  width: 150px;
+}
+.w-80px {
+  width: 80px;
+}
+
+.chakra-button.add-button {
+  display: inline-flex;
+  appearance: none;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  position: relative;
+  white-space: nowrap;
+  vertical-align: middle;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  line-height: 1.2;
+  border-radius: var(--chakra-radii-md);
+  font-weight: var(--chakra-fontWeights-semibold);
+  transition-property: var(--chakra-transition-property-common);
+  transition-duration: var(--chakra-transition-duration-normal);
+  height: var(--chakra-sizes-8);
+  min-width: var(--chakra-sizes-8);
+  font-size: var(--chakra-fontSizes-sm);
+  padding-inline-start: var(--chakra-space-3);
+  padding-inline-end: var(--chakra-space-3);
+  background: var(--chakra-colors-green-500);
+  color: var(--chakra-colors-white);
+}
+
+.chakra-table.table {
+  font-variant-numeric: lining-nums tabular-nums;
+  border-collapse: collapse;
+  width: var(--chakra-sizes-full);
+}
