@@ -98,13 +98,16 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
   }, [lectures, searchOptions]);
   const lastPage = Math.ceil(filteredLectures.length / PAGE_SIZE);
   const visibleLectures = filteredLectures.slice(0, page * PAGE_SIZE);
-  const allMajors = [...new Set(lectures.map(lecture => lecture.major))];
+  const allMajors = useMemo(() => [...new Set(lectures.map(lecture => lecture.major))], [lectures]);
 
-  const changeSearchOption = (field: keyof SearchOption, value: SearchOption[typeof field]) => {
-    setPage(1);
-    setSearchOptions({ ...searchOptions, [field]: value });
-    loaderWrapperRef.current?.scrollTo(0, 0);
-  };
+  const changeSearchOption = useCallback(
+    (field: keyof SearchOption, value: SearchOption[typeof field]) => {
+      setPage(1);
+      setSearchOptions(prev => ({ ...prev, [field]: value }));
+      loaderWrapperRef.current?.scrollTo(0, 0);
+    },
+    [],
+  );
 
   const addSchedule = useCallback(
     (lecture: Lecture) => {
@@ -171,6 +174,18 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     setPage(1);
   }, [searchInfo]);
 
+  const handleChange = useMemo(
+    () => ({
+      query: (value: SearchOption['query']) => changeSearchOption('query', value),
+      credits: (value: SearchOption['credits']) => changeSearchOption('credits', value),
+      grades: (value: SearchOption['grades']) => changeSearchOption('grades', value),
+      days: (value: SearchOption['days']) => changeSearchOption('days', value),
+      times: (value: SearchOption['times']) => changeSearchOption('times', value),
+      majors: (value: SearchOption['majors']) => changeSearchOption('majors', value),
+    }),
+    [changeSearchOption],
+  );
+
   return (
     <Modal isOpen={Boolean(searchInfo)} onClose={onClose} size="6xl">
       <ModalOverlay />
@@ -180,33 +195,18 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
         <ModalBody>
           <VStack spacing={4} align="stretch">
             <HStack spacing={4}>
-              <QueryInput
-                value={searchOptions.query}
-                onChange={value => changeSearchOption('query', value)}
-              />
-              <CreditsSelect
-                value={searchOptions.credits}
-                onChange={value => changeSearchOption('credits', value)}
-              />
+              <QueryInput value={searchOptions.query} onChange={handleChange.query} />
+              <CreditsSelect value={searchOptions.credits} onChange={handleChange.credits} />
             </HStack>
             <HStack spacing={4}>
-              <GradesCheckboxes
-                value={searchOptions.grades}
-                onChange={value => changeSearchOption('grades', value)}
-              />
-              <DaysCheckboxes
-                value={searchOptions.days}
-                onChange={value => changeSearchOption('days', value)}
-              />
+              <GradesCheckboxes value={searchOptions.grades} onChange={handleChange.grades} />
+              <DaysCheckboxes value={searchOptions.days} onChange={handleChange.days} />
             </HStack>
             <HStack spacing={4}>
-              <TimesCheckboxes
-                value={searchOptions.times}
-                onChange={value => changeSearchOption('times', value)}
-              />
+              <TimesCheckboxes value={searchOptions.times} onChange={handleChange.times} />
               <MajorsCheckboxes
                 value={searchOptions.majors}
-                onChange={value => changeSearchOption('majors', value)}
+                onChange={handleChange.majors}
                 items={allMajors}
               />
             </HStack>
