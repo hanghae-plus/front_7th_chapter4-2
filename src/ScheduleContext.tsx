@@ -1,28 +1,58 @@
-import React, { createContext, PropsWithChildren, useContext, useState } from "react";
-import { Schedule } from "./types.ts";
-import dummyScheduleMap from "./dummyScheduleMap.ts";
+/* eslint-disable react-refresh/only-export-components */
+import React, {
+  createContext,
+  PropsWithChildren,
+  useContext,
+  useState,
+} from "react";
+import dummyScheduleMap from "./dummyScheduleMap";
+import { Schedule } from "./types";
 
-interface ScheduleContextType {
-  schedulesMap: Record<string, Schedule[]>;
-  setSchedulesMap: React.Dispatch<React.SetStateAction<Record<string, Schedule[]>>>;
-}
+type SchedulesMap = Record<string, Schedule[]>;
+type SetSchedulesMap = React.Dispatch<React.SetStateAction<SchedulesMap>>;
 
-const ScheduleContext = createContext<ScheduleContextType | undefined>(undefined);
+const ScheduleQueryContext = createContext<SchedulesMap | undefined>(undefined);
+const ScheduleCommandContext = createContext<SetSchedulesMap | undefined>(
+  undefined
+);
 
-export const useScheduleContext = () => {
-  const context = useContext(ScheduleContext);
-  if (context === undefined) {
-    throw new Error('useSchedule must be used within a ScheduleProvider');
+ScheduleQueryContext.displayName = "ScheduleQueryContext";
+ScheduleCommandContext.displayName = "ScheduleCommandContext";
+
+const useContextSafely = <T,>(
+  context: React.Context<T | undefined>,
+  contextName: string
+): T => {
+  const value = useContext(context);
+  if (value === undefined) {
+    throw new Error(
+      `${contextName}를 사용하려면 ScheduleProvider 내부에서 사용해야 합니다`
+    );
   }
-  return context;
+  return value;
 };
 
+export const useScheduleQueryContext = () =>
+  useContextSafely(ScheduleQueryContext, "Schedule Query");
+
+export const useScheduleCommandContext = () =>
+  useContextSafely(ScheduleCommandContext, "Schedule Command");
+
+export const useScheduleContext = () => ({
+  schedulesMap: useScheduleQueryContext(),
+  setSchedulesMap: useScheduleCommandContext(),
+});
+
 export const ScheduleProvider = ({ children }: PropsWithChildren) => {
-  const [schedulesMap, setSchedulesMap] = useState<Record<string, Schedule[]>>(dummyScheduleMap);
+  const [schedulesMap, setSchedulesMap] = useState<SchedulesMap>(
+    () => dummyScheduleMap
+  );
 
   return (
-    <ScheduleContext.Provider value={{ schedulesMap, setSchedulesMap }}>
-      {children}
-    </ScheduleContext.Provider>
+    <ScheduleCommandContext.Provider value={setSchedulesMap}>
+      <ScheduleQueryContext.Provider value={schedulesMap}>
+        {children}
+      </ScheduleQueryContext.Provider>
+    </ScheduleCommandContext.Provider>
   );
 };
