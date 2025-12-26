@@ -1,7 +1,7 @@
 import { DndContext, Modifier, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { PropsWithChildren } from "react";
 import { CellSize, DAY_LABELS } from "./constants.ts";
-import { useScheduleContext } from "./ScheduleContext.tsx";
+import {useScheduleContext, useScheduleDispatch } from "./ScheduleContext.tsx";
 
 function createSnapModifier(): Modifier {
   return ({ transform, containerNodeRect, draggingNodeRect }) => {
@@ -29,7 +29,8 @@ function createSnapModifier(): Modifier {
 const modifiers = [createSnapModifier()]
 
 export default function ScheduleDndProvider({ children }: PropsWithChildren) {
-  const { schedulesMap, setSchedulesMap } = useScheduleContext();
+  const { schedulesMap } = useScheduleContext();
+  const { setSchedulesMap } = useScheduleDispatch();
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -51,8 +52,9 @@ export default function ScheduleDndProvider({ children }: PropsWithChildren) {
     setSchedulesMap({
       ...schedulesMap,
       [tableId]: schedulesMap[tableId].map((targetSchedule, targetIndex) => {
+        // 변경되지 않은 강의는 기존 객체를 그대로 반환 -> 참조 유지 -> 리렌더링 방지
         if (targetIndex !== Number(index)) {
-          return { ...targetSchedule }
+          return targetSchedule
         }
         return {
           ...targetSchedule,
