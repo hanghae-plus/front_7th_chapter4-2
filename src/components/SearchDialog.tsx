@@ -16,7 +16,7 @@ import {
   Tr,
   VStack,
 } from "@chakra-ui/react";
-import { useScheduleContext } from "./ScheduleContext.tsx";
+import { useSetSchedulesMap } from "./ScheduleContext.tsx";
 import { Lecture } from "../types";
 import { parseSchedule } from "../utils";
 import axios from "axios";
@@ -61,7 +61,7 @@ const fetchAllLectures = async () =>
 
 // TODO: 이 컴포넌트에서 불필요한 연산이 발생하지 않도록 다양한 방식으로 시도해주세요.
 const SearchDialog = ({ isOpen, initialTableId, initialDay, initialTime, onClose }: Props) => {
-  const { setSchedulesMap } = useScheduleContext();
+  const setSchedulesMap = useSetSchedulesMap();
 
   // searchInfo를 내부 state로 관리
   const [currentTableId, setCurrentTableId] = useState(initialTableId);

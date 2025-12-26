@@ -1,6 +1,6 @@
 import { Button, ButtonGroup, Flex, Heading, Stack } from "@chakra-ui/react";
 import ScheduleTable from "./ScheduleTable.tsx";
-import { useScheduleContext } from "./ScheduleContext.tsx";
+import { useSchedulesMap, useSetSchedulesMap } from "./ScheduleContext.tsx";
 import SearchDialog from "./SearchDialog.tsx";
 import { useState, useCallback, memo } from "react";
 import { Schedule } from "../types";
@@ -38,7 +38,8 @@ const MemoizedScheduleTableItem = memo(({
 MemoizedScheduleTableItem.displayName = 'MemoizedScheduleTableItem';
 
 export const ScheduleTables = () => {
-  const { schedulesMap, setSchedulesMap } = useScheduleContext();
+  const schedulesMap = useSchedulesMap();
+  const setSchedulesMap = useSetSchedulesMap();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [dialogInitialState, setDialogInitialState] = useState<{
     tableId: string;

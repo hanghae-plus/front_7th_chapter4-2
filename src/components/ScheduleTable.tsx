@@ -17,7 +17,7 @@ import { Schedule } from "../types";
 import { fill2, parseHnM } from "../utils";
 import { useDndContext, useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { ComponentProps, Fragment, memo } from "react";
+import { ComponentProps, Fragment, memo, useCallback, useMemo } from "react";
 
 // DnD context를 구독하여 active 상태를 체크하는 최적화된 컴포넌트
 const DndActiveOutline = memo(({ tableId, children }: { tableId: string; children: React.ReactNode }) => {
@@ -43,6 +43,39 @@ const DndActiveOutline = memo(({ tableId, children }: { tableId: string; childre
 
 DndActiveOutline.displayName = 'DndActiveOutline';
 
+// DraggableSchedule를 감싸는 메모이제이션된 래퍼
+const MemoizedDraggableSchedule = memo(({
+  tableId,
+  index,
+  schedule,
+  getColor,
+  onDeleteButtonClick,
+}: {
+  tableId: string;
+  index: number;
+  schedule: Schedule;
+  getColor: (lectureId: string) => string;
+  onDeleteButtonClick?: (timeInfo: { day: string; time: number }) => void;
+}) => {
+  const handleDelete = useCallback(() => {
+    onDeleteButtonClick?.({
+      day: schedule.day,
+      time: schedule.range[0],
+    });
+  }, [schedule.day, schedule.range, onDeleteButtonClick]);
+
+  return (
+    <DraggableSchedule
+      id={`${tableId}:${index}`}
+      data={schedule}
+      bg={getColor(schedule.lecture.id)}
+      onDeleteButtonClick={handleDelete}
+    />
+  );
+});
+
+MemoizedDraggableSchedule.displayName = 'MemoizedDraggableSchedule';
+
 interface Props {
   tableId: string;
   schedules: Schedule[];
@@ -63,11 +96,13 @@ const TIMES = [
 ] as const;
 
 const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButtonClick }: Props) => {
-  const getColor = (lectureId: string): string => {
+  const getColor = useMemo(() => {
     const lectures = [...new Set(schedules.map(({ lecture }) => lecture.id))];
     const colors = ["#fdd", "#ffd", "#dff", "#ddf", "#fdf", "#dfd"];
-    return colors[lectures.indexOf(lectureId) % colors.length];
-  };
+    return (lectureId: string): string => {
+      return colors[lectures.indexOf(lectureId) % colors.length];
+    };
+  }, [schedules]);
 
   return (
     <DndActiveOutline tableId={tableId}>
@@ -117,17 +152,13 @@ const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButton
       </Grid>
 
       {schedules.map((schedule, index) => (
-        <DraggableSchedule
+        <MemoizedDraggableSchedule
           key={`${schedule.lecture.title}-${index}`}
-          id={`${tableId}:${index}`}
-          data={schedule}
-          bg={getColor(schedule.lecture.id)}
-          onDeleteButtonClick={() =>
-            onDeleteButtonClick?.({
-              day: schedule.day,
-              time: schedule.range[0],
-            })
-          }
+          tableId={tableId}
+          index={index}
+          schedule={schedule}
+          getColor={getColor}
+          onDeleteButtonClick={onDeleteButtonClick}
         />
       ))}
     </DndActiveOutline>

@@ -2,23 +2,42 @@ import React, { createContext, PropsWithChildren, useContext, useState } from "r
 import { Schedule } from "../types";
 import dummyScheduleMap from "../dummy/dummyScheduleMap.ts";
 
-interface ScheduleContextType {
-  schedulesMap: Record<string, Schedule[]>;
-  setSchedulesMap: React.Dispatch<React.SetStateAction<Record<string, Schedule[]>>>;
-}
+// schedulesMap과 setSchedulesMap을 분리하여 불필요한 리렌더링 방지
+const SchedulesMapContext = createContext<Record<string, Schedule[]> | undefined>(undefined);
+const SetSchedulesMapContext = createContext<React.Dispatch<React.SetStateAction<Record<string, Schedule[]>>> | undefined>(undefined);
 
-const ScheduleContext = createContext<ScheduleContextType | undefined>(undefined);
-
-export const useScheduleContext = () => {
-  const context = useContext(ScheduleContext);
+export const useSchedulesMap = () => {
+  const context = useContext(SchedulesMapContext);
   if (context === undefined) {
-    throw new Error("useSchedule must be used within a ScheduleProvider");
+    throw new Error("useSchedulesMap must be used within a ScheduleProvider");
   }
   return context;
+};
+
+export const useSetSchedulesMap = () => {
+  const context = useContext(SetSchedulesMapContext);
+  if (context === undefined) {
+    throw new Error("useSetSchedulesMap must be used within a ScheduleProvider");
+  }
+  return context;
+};
+
+// 하위 호환성을 위한 기존 hook
+export const useScheduleContext = () => {
+  return {
+    schedulesMap: useSchedulesMap(),
+    setSchedulesMap: useSetSchedulesMap(),
+  };
 };
 
 export const ScheduleProvider = ({ children }: PropsWithChildren) => {
   const [schedulesMap, setSchedulesMap] = useState<Record<string, Schedule[]>>(dummyScheduleMap);
 
-  return <ScheduleContext.Provider value={{ schedulesMap, setSchedulesMap }}>{children}</ScheduleContext.Provider>;
+  return (
+    <SchedulesMapContext.Provider value={schedulesMap}>
+      <SetSchedulesMapContext.Provider value={setSchedulesMap}>
+        {children}
+      </SetSchedulesMapContext.Provider>
+    </SchedulesMapContext.Provider>
+  );
 };
