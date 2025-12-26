@@ -1,56 +1,32 @@
 import { Flex } from '@chakra-ui/react';
-import { lazy, startTransition, Suspense, useDeferredValue, useMemo, useState } from 'react';
-import { useScheduleAction, useScheduleContext } from '../../contexts/ScheduleContext.ts';
+import { lazy, Suspense, useDeferredValue, useMemo, useState } from 'react';
+import { useScheduleContext } from '../../contexts/ScheduleContext.ts';
 import useAutoCallback from '../../hooks/useAutoCallback.ts';
+import { useScheduleBoard } from '../../hooks/useScheduleBoard.ts';
 import ScheduleBoard from './ScheduleBoard.tsx';
 
 const SearchDialog = lazy(() => import('../search/SearchDialog.tsx'));
 
 const SchedulePage = () => {
   const schedulesMap = useScheduleContext();
-  const setSchedulesMap = useScheduleAction();
+  const { duplicateBoard, removeBoard, deleteSchedule } = useScheduleBoard();
   const [searchInfo, setSearchInfo] = useState<{
     tableId: string;
     day?: string;
     time?: number;
   } | null>(null);
-
   const deferredSchedulesMap = useDeferredValue(schedulesMap);
   const isRemoveDisabled = useMemo(() => Object.keys(schedulesMap).length === 1, [schedulesMap]);
 
   const handleOpenSearchDialog = useAutoCallback((tableId: string) => setSearchInfo({ tableId }));
   const handleCloseSearchDialog = useAutoCallback(() => setSearchInfo(null));
-  const handleDuplicateBoard = useAutoCallback((targetId: string) =>
-    startTransition(() => {
-      setSchedulesMap(prev => ({
-        ...prev,
-        [`schedule-${Date.now()}`]: [...prev[targetId]],
-      }));
-    }),
-  );
-  const handleRemoveBoard = useAutoCallback((targetId: string) =>
-    startTransition(() => {
-      setSchedulesMap(prev => {
-        delete prev[targetId];
-        return { ...prev };
-      });
-    }),
-  );
   const handleEmptyTimeCellClick = useAutoCallback(
     (tableId: string, timeInfo: { day: string; time: number }) =>
       setSearchInfo({ tableId, ...timeInfo }),
   );
-  const handleScheduleDelete = useAutoCallback(
-    (tableId: string, { day, time }: { day: string; time: number }) =>
-      startTransition(() => {
-        setSchedulesMap(prev => ({
-          ...prev,
-          [tableId]: prev[tableId].filter(
-            schedule => schedule.day !== day || !schedule.range.includes(time),
-          ),
-        }));
-      }),
-  );
+  const handleDuplicateBoard = useAutoCallback(duplicateBoard);
+  const handleRemoveBoard = useAutoCallback(removeBoard);
+  const handleScheduleDelete = useAutoCallback(deleteSchedule);
 
   return (
     <>

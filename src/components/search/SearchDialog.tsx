@@ -10,13 +10,15 @@ import {
   Text,
   VStack,
 } from '@chakra-ui/react';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { PAGE_SIZE } from '../../constants/search.ts';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { useScheduleAction } from '../../contexts/ScheduleContext.ts';
 import useAutoCallback from '../../hooks/useAutoCallback.ts';
-import { cachedFetch } from '../../lib/cachedFetch.ts';
-import { Lecture, SearchOption } from '../../types/search.ts';
+import { useInfiniteScroll } from '../../hooks/useInfiniteScroll.ts';
+import { useSearchOptions } from '../../hooks/useSearchOptions.ts';
+import { fetchAllLectures } from '../../services/lectureService.ts';
+import { Lecture } from '../../types/search.ts';
 import { parseSchedule } from '../../utils/schedule.ts';
+import { filterLectures } from '../../utils/search.ts';
 import {
   CreditsSelect,
   DaysCheckboxes,
@@ -37,76 +39,26 @@ interface Props {
   onClose: () => void;
 }
 
-const fetchMajors = () => cachedFetch<Lecture[]>('./schedules-majors.json');
-const fetchLiberalArts = () => cachedFetch<Lecture[]>('./schedules-liberal-arts.json');
-
-// TODO: 이 코드를 개선해서 API 호출을 최소화 해보세요 + Promise.all이 현재 잘못 사용되고 있습니다. 같이 개선해주세요.
-const fetchAllLectures = () =>
-  Promise.all([
-    fetchMajors(),
-    fetchLiberalArts(),
-    fetchMajors(),
-    fetchLiberalArts(),
-    fetchMajors(),
-    fetchLiberalArts(),
-  ]);
-
-// TODO: 이 컴포넌트에서 불필요한 연산이 발생하지 않도록 다양한 방식으로 시도해주세요.
 const SearchDialog = memo(({ searchInfo, onClose }: Props) => {
   const setSchedulesMap = useScheduleAction();
-
-  const loaderWrapperRef = useRef<HTMLDivElement>(null);
-  const loaderRef = useRef<HTMLDivElement>(null);
   const [lectures, setLectures] = useState<Lecture[]>([]);
-  const [page, setPage] = useState(1);
-  const [searchOptions, setSearchOptions] = useState<SearchOption>({
-    query: '',
-    grades: [],
-    days: [],
-    times: [],
-    majors: [],
+  const { searchOptions, handleChange } = useSearchOptions({
+    initialDay: searchInfo?.day,
+    initialTime: searchInfo?.time,
+  });
+  const filteredLectures = useMemo(
+    () => filterLectures(lectures, searchOptions),
+    [lectures, searchOptions],
+  );
+  const { loaderWrapperRef, loaderRef, visibleCount, resetPage } = useInfiniteScroll({
+    totalItems: filteredLectures.length,
   });
 
-  const filteredLectures = useMemo(() => {
-    const { query = '', credits, grades, days, times, majors } = searchOptions;
-    return lectures
-      .filter(
-        lecture =>
-          lecture.title.toLowerCase().includes(query.toLowerCase()) ||
-          lecture.id.toLowerCase().includes(query.toLowerCase()),
-      )
-      .filter(lecture => grades.length === 0 || grades.includes(lecture.grade))
-      .filter(lecture => majors.length === 0 || majors.includes(lecture.major))
-      .filter(lecture => !credits || lecture.credits.startsWith(String(credits)))
-      .filter(lecture => {
-        if (days.length === 0) {
-          return true;
-        }
-        const schedules = lecture.schedule ? parseSchedule(lecture.schedule) : [];
-        return schedules.some(s => days.includes(s.day));
-      })
-      .filter(lecture => {
-        if (times.length === 0) {
-          return true;
-        }
-        const schedules = lecture.schedule ? parseSchedule(lecture.schedule) : [];
-        return schedules.some(s => s.range.some(time => times.includes(time)));
-      });
-  }, [lectures, searchOptions]);
-  const lastPage = Math.ceil(filteredLectures.length / PAGE_SIZE);
   const visibleLectures = useMemo(
-    () => filteredLectures.slice(0, page * PAGE_SIZE),
-    [filteredLectures, page],
+    () => filteredLectures.slice(0, visibleCount),
+    [filteredLectures, visibleCount],
   );
   const allMajors = useMemo(() => [...new Set(lectures.map(lecture => lecture.major))], [lectures]);
-
-  const changeSearchOption = useAutoCallback(
-    (field: keyof SearchOption, value: SearchOption[typeof field]) => {
-      setPage(1);
-      setSearchOptions(prev => ({ ...prev, [field]: value }));
-      loaderWrapperRef.current?.scrollTo(0, 0);
-    },
-  );
 
   const addSchedule = useAutoCallback((lecture: Lecture) => {
     if (!searchInfo) return;
@@ -125,78 +77,24 @@ const SearchDialog = memo(({ searchInfo, onClose }: Props) => {
 
     onClose();
   });
+  const handleOptionChange = useAutoCallback(resetPage);
+
+  useEffect(() => {
+    handleOptionChange();
+  }, [searchOptions, handleOptionChange]);
 
   useEffect(() => {
     if (!searchInfo) return;
 
     const start = performance.now();
     console.log('API 호출 시작: ', start);
-    fetchAllLectures().then(results => {
+    fetchAllLectures().then(lectures => {
       const end = performance.now();
       console.log('모든 API 호출 완료 ', end);
       console.log('API 호출에 걸린 시간(ms): ', end - start);
-      setLectures(results.flatMap(result => result.data));
+      setLectures(lectures);
     });
   }, [searchInfo]);
-
-  useEffect(() => {
-    const $loader = loaderRef.current;
-    const $loaderWrapper = loaderWrapperRef.current;
-
-    if (!$loader || !$loaderWrapper) {
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      entries => {
-        if (entries[0].isIntersecting) {
-          setPage(prevPage => Math.min(lastPage, prevPage + 1));
-        }
-      },
-      { threshold: 0, root: $loaderWrapper },
-    );
-
-    observer.observe($loader);
-
-    return () => observer.unobserve($loader);
-  }, [lastPage]);
-
-  useEffect(() => {
-    setSearchOptions(prev => ({
-      ...prev,
-      days: searchInfo?.day ? [searchInfo.day] : [],
-      times: searchInfo?.time ? [searchInfo.time] : [],
-    }));
-    setPage(1);
-  }, [searchInfo]);
-
-  const handleChangeQuery = useAutoCallback((value: SearchOption['query']) =>
-    changeSearchOption('query', value),
-  );
-  const handleChangeCredits = useAutoCallback((value: SearchOption['credits']) =>
-    changeSearchOption('credits', value),
-  );
-  const handleChangeGrades = useAutoCallback((value: SearchOption['grades']) =>
-    changeSearchOption('grades', value),
-  );
-  const handleChangeDays = useAutoCallback((value: SearchOption['days']) =>
-    changeSearchOption('days', value),
-  );
-  const handleChangeTimes = useAutoCallback((value: SearchOption['times']) =>
-    changeSearchOption('times', value),
-  );
-  const handleChangeMajors = useAutoCallback((value: SearchOption['majors']) =>
-    changeSearchOption('majors', value),
-  );
-
-  const handleChange = {
-    query: handleChangeQuery,
-    credits: handleChangeCredits,
-    grades: handleChangeGrades,
-    days: handleChangeDays,
-    times: handleChangeTimes,
-    majors: handleChangeMajors,
-  };
 
   return (
     <Modal isOpen={Boolean(searchInfo)} onClose={onClose} size="6xl">
