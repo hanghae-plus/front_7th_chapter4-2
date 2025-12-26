@@ -19,6 +19,30 @@ import { useDndContext, useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { ComponentProps, Fragment, memo } from "react";
 
+// DnD context를 구독하여 active 상태를 체크하는 최적화된 컴포넌트
+const DndActiveOutline = memo(({ tableId, children }: { tableId: string; children: React.ReactNode }) => {
+  const dndContext = useDndContext();
+
+  const getActiveTableId = () => {
+    const activeId = dndContext.active?.id;
+    if (activeId) {
+      return String(activeId).split(":")[0];
+    }
+    return null;
+  };
+
+  const activeTableId = getActiveTableId();
+  const isActive = activeTableId === tableId;
+
+  return (
+    <Box position="relative" outline={isActive ? "5px dashed" : undefined} outlineColor="blue.300">
+      {children}
+    </Box>
+  );
+});
+
+DndActiveOutline.displayName = 'DndActiveOutline';
+
 interface Props {
   tableId: string;
   schedules: Schedule[];
@@ -45,20 +69,8 @@ const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButton
     return colors[lectures.indexOf(lectureId) % colors.length];
   };
 
-  const dndContext = useDndContext();
-
-  const getActiveTableId = () => {
-    const activeId = dndContext.active?.id;
-    if (activeId) {
-      return String(activeId).split(":")[0];
-    }
-    return null;
-  };
-
-  const activeTableId = getActiveTableId();
-
   return (
-    <Box position="relative" outline={activeTableId === tableId ? "5px dashed" : undefined} outlineColor="blue.300">
+    <DndActiveOutline tableId={tableId}>
       <Grid
         templateColumns={`120px repeat(${DAY_LABELS.length}, ${CellSize.WIDTH}px)`}
         templateRows={`40px repeat(${TIMES.length}, ${CellSize.HEIGHT}px)`}
@@ -118,11 +130,11 @@ const ScheduleTable = ({ tableId, schedules, onScheduleTimeClick, onDeleteButton
           }
         />
       ))}
-    </Box>
+    </DndActiveOutline>
   );
 };
 
-const DraggableSchedule = ({
+const DraggableSchedule = memo(({
   id,
   data,
   bg,
@@ -172,6 +184,8 @@ const DraggableSchedule = ({
       </PopoverContent>
     </Popover>
   );
-};
+});
+
+DraggableSchedule.displayName = 'DraggableSchedule';
 
 export default memo(ScheduleTable);
