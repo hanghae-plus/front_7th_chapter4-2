@@ -49,8 +49,9 @@ interface SearchOption {
 
 const PAGE_SIZE = 100
 
-const fetchMajors = () => axios.get<Lecture[]>("/schedules-majors.json")
-const fetchLiberalArts = () => axios.get<Lecture[]>("/schedules-liberal-arts.json")
+const fetchMajors = () => axios.get<Lecture[]>(`${import.meta.env.BASE_URL}/schedules-majors.json`)
+const fetchLiberalArts = () =>
+  axios.get<Lecture[]>(`${import.meta.env.BASE_URL}/schedules-liberal-arts.json`)
 
 const fetchAllLectures = async () =>
   await Promise.all([
@@ -83,7 +84,6 @@ const LectureTableRow = memo(
   }
 )
 
-// TODO: 이 컴포넌트에서 불필요한 연산이 발생하지 않도록 다양한 방식으로 시도해주세요.
 const SearchDialog = ({ searchInfo, onClose }: Props) => {
   const { setSchedulesMap } = useScheduleContext()
 
