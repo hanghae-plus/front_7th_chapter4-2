@@ -1,0 +1,349 @@
+name: Lighthouse CI
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'URL to run Lighthouse on'
+        required: false
+        default: 'http://localhost:8080'
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  lighthouse-audit:
+    name: Lighthouse Audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show workspace info
+        run: |
+          echo "Workspace: ${{ github.workspace }}"
+          echo "Current directory: $(pwd)"
+          ls -la
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: |
+          echo "Current directory: $(pwd)"
+          pnpm install --frozen-lockfile
+          npm install -g @lhci/cli@0.14.x
+
+      - name: Build project
+        run: |
+          echo "Current directory: $(pwd)"
+          pnpm run build
+          echo "Build completed. Checking dist directory..."
+          ls -la dist/ | head -10 || echo "dist directory not found"
+
+      - name: Start local server
+        run: |
+          echo "Current directory: $(pwd)"
+          npx http-server dist -p 8080 -c-1 &
+          echo "Waiting for server to start..."
+          for i in {1..30}; do
+            if curl -f http://localhost:8080 > /dev/null 2>&1; then
+              echo "Server is ready!"
+              break
+            fi
+            sleep 1
+          done
+          curl -f http://localhost:8080 || exit 1
+
+      - name: Run Lighthouse CI
+        id: lighthouse
+        continue-on-error: true
+        run: |
+          echo "Current directory: $(pwd)"
+          echo "Workspace: ${{ github.workspace }}"
+          echo "Running Lighthouse CI..."
+          lhci autorun || {
+            echo "Lighthouse CI failed, trying alternative method..."
+            npx @lhci/cli@0.14.x autorun || echo "All Lighthouse methods failed"
+          }
+          echo "Lighthouse CI execution completed"
+
+      - name: Check Lighthouse reports
+        if: always()
+        run: |
+          echo "Current directory: $(pwd)"
+          echo "Workspace: ${{ github.workspace }}"
+          if [ -d ".lighthouseci" ]; then
+            echo "Lighthouse reports directory exists"
+            echo "Files in .lighthouseci:"
+            ls -la .lighthouseci/ || echo "Directory is empty"
+            echo ""
+            echo "JSON files:"
+            find .lighthouseci -name "*.json" -type f | head -10
+            echo ""
+            echo "File sizes:"
+            find .lighthouseci -name "*.json" -type f -exec ls -lh {} \; | head -10
+          else
+            echo "Lighthouse reports directory does not exist"
+          fi
+
+      - name: Create GitHub Issue with Results
+        if: always()
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            const lhciDir = '.lighthouseci';
+
+            // .lighthouseci 디렉토리 확인
+            if (!fs.existsSync(lhciDir)) {
+              console.log('No lighthouse reports found');
+              return;
+            }
+
+            const jsonReports = fs.readdirSync(lhciDir).filter(f => f.endsWith('.json') && !f.includes('manifest'));
+
+            if (jsonReports.length === 0) {
+              console.log('No JSON reports found');
+              console.log('All files in .lighthouseci:', fs.readdirSync(lhciDir));
+              return;
+            }
+
+            console.log('Found JSON reports:', jsonReports);
+
+            const latestReport = jsonReports.sort().reverse()[0];
+            const reportPath = path.join(lhciDir, latestReport);
+            
+            console.log('Reading report from:', reportPath);
+            
+            let report;
+            try {
+              const reportContent = fs.readFileSync(reportPath, 'utf8');
+              report = JSON.parse(reportContent);
+              
+              // 리포트 구조 확인
+              console.log('Report type:', Array.isArray(report) ? 'Array' : typeof report);
+              if (Array.isArray(report)) {
+                console.log('Report is array, length:', report.length);
+                if (report.length > 0) {
+                  console.log('First item keys:', Object.keys(report[0]).slice(0, 10));
+                }
+              } else {
+                console.log('Report top-level keys:', Object.keys(report).slice(0, 10));
+              }
+            } catch (e) {
+              console.log(`Failed to parse report file: ${e.message}`);
+              return;
+            }
+
+            // 리포트가 배열이면 첫 번째 항목 사용, lhr 객체가 있으면 사용
+            if (Array.isArray(report)) {
+              console.log('Report is array, using first item');
+              report = report[0];
+            }
+            if (report && report.lhr) {
+              console.log('Report has lhr property, using it');
+              report = report.lhr;
+            }
+            
+            // 최종 리포트 구조 확인
+            if (!report) {
+              console.log('ERROR: Report is null or undefined after parsing');
+              return;
+            }
+            
+            console.log('Final report keys:', Object.keys(report).slice(0, 20));
+            console.log('Has categories?', !!report.categories);
+            console.log('Has audits?', !!report.audits);
+            
+            if (!report.categories) {
+              console.log('ERROR: Report does not have categories property');
+              console.log('Report structure:', JSON.stringify(Object.keys(report)));
+              // 리포트가 유효하지 않으면 이슈를 생성하지 않음
+              return;
+            }
+            
+            if (!report.audits) {
+              console.log('WARNING: Report does not have audits property');
+            } else {
+              console.log('Audits count:', Object.keys(report.audits).length);
+            }
+            
+            console.log('Categories found:', Object.keys(report.categories));
+
+            const formatScore = (value = 0) => {
+              return Math.round(value * 100);
+            };
+
+            const getEmoji = (value, metric) => {
+              const thresholds = {
+                LCP: { good: 2500, needsImprovement: 4000 },
+                INP: { good: 200, needsImprovement: 500 },
+                CLS: { good: 0.1, needsImprovement: 0.25 },
+              };
+              
+              if (!thresholds[metric]) return value >= 90 ? '🟢' : value >= 50 ? '🟠' : '🔴';
+              
+              const t = thresholds[metric];
+              return value <= t.good ? '🟢' : value <= t.needsImprovement ? '🟠' : '🔴';
+            };
+
+            const formatMetric = (value, metric) => {
+              if (value === null || value === undefined) return 'N/A';
+              // CLS는 0이 유효한 값일 수 있음
+              if (metric === 'CLS') {
+                if (value === 0) return '0.000';
+                return value.toFixed(3);
+              }
+              // LCP, INP는 0이면 측정 안 됨
+              if (value === 0) return 'N/A';
+              return `${(value / 1000).toFixed(2)}s`;
+            };
+
+            const getLighthouseResult = (report, category) => {
+              try {
+                const score = report.categories?.[category]?.score;
+                console.log(`${category} score:`, score);
+                return score ?? 0;
+              } catch (e) {
+                console.log(`Error getting ${category}:`, e.message);
+                return 0;
+              }
+            };
+
+            const getMetricValue = (report, metric) => {
+              try {
+                const audit = report.audits?.[metric];
+                const value = audit?.numericValue;
+                console.log(`${metric}:`, value, '(from audit:', !!audit, ')');
+                return value ?? 0;
+              } catch (e) {
+                console.log(`Error getting ${metric}:`, e.message);
+                return 0;
+              }
+            };
+
+            const lighthouseScores = {
+              performance: getLighthouseResult(report, 'performance'),
+              accessibility: getLighthouseResult(report, 'accessibility'),
+              'best-practices': getLighthouseResult(report, 'best-practices'),
+              seo: getLighthouseResult(report, 'seo'),
+              pwa: getLighthouseResult(report, 'pwa')
+            };
+
+            console.log('All lighthouse scores:', lighthouseScores);
+
+            const webVitals = {
+              LCP: getMetricValue(report, 'largest-contentful-paint'),
+              INP: getMetricValue(report, 'experimental-interaction-to-next-paint'),
+              CLS: getMetricValue(report, 'cumulative-layout-shift')
+            };
+
+            console.log('All web vitals:', webVitals);
+
+            const reportUrl = `.lighthouseci/${latestReport.replace('.json', '.html')}`;
+
+            // 커밋 정보 가져오기
+            const commitSha = context.sha;
+            const commitMessage = context.payload.head_commit?.message || 'No commit message';
+            const commitLink = `https://github.com/${context.repo.owner}/${context.repo.repo}/commit/${commitSha}`;
+            const shortSha = commitSha ? commitSha.substring(0, 7) : 'unknown';
+
+            const body = `## 🚨 웹사이트 성능 측정 결과
+
+            ### 📌 최신 커밋 정보
+            - **커밋**: [\`${shortSha}\`](${commitLink})
+            - **커밋 메시지**: ${commitMessage.split('\n')[0].trim()}
+
+            ### 🎯 Lighthouse 점수
+            | 카테고리 | 점수 | 상태 |
+            |----------|------|------|
+            | Performance | ${formatScore(lighthouseScores.performance)}% | ${getEmoji(formatScore(lighthouseScores.performance))} |
+            | Accessibility | ${formatScore(lighthouseScores.accessibility)}% | ${getEmoji(formatScore(lighthouseScores.accessibility))} |
+            | Best Practices | ${formatScore(lighthouseScores['best-practices'])}% | ${getEmoji(formatScore(lighthouseScores['best-practices']))} |
+            | SEO | ${formatScore(lighthouseScores.seo)}% | ${getEmoji(formatScore(lighthouseScores.seo))} |
+            | PWA | ${formatScore(lighthouseScores.pwa)}% | ${getEmoji(formatScore(lighthouseScores.pwa))} |
+
+            ### 📊 Core Web Vitals (2024)
+            | 메트릭 | 설명 | 측정값 | 상태 |
+            |--------|------|--------|------|
+            | LCP | Largest Contentful Paint | ${formatMetric(webVitals.LCP, 'LCP')} | ${getEmoji(webVitals.LCP, 'LCP')} |
+            | INP | Interaction to Next Paint | ${formatMetric(webVitals.INP, 'INP')} | ${getEmoji(webVitals.INP, 'INP')} |
+            | CLS | Cumulative Layout Shift | ${formatMetric(webVitals.CLS, 'CLS')} | ${getEmoji(webVitals.CLS, 'CLS')} |
+
+            ### 📝 Core Web Vitals 기준값
+            - **LCP (Largest Contentful Paint)**: 가장 큰 콘텐츠가 화면에 그려지는 시점 
+              - 🟢 Good: < 2.5s
+              - 🟠 Needs Improvement: < 4.0s
+              - 🔴 Poor: ≥ 4.0s
+
+            - **INP (Interaction to Next Paint)**: 사용자 상호작용에 대한 전반적인 응답성
+              - 🟢 Good: < 200ms
+              - 🟠 Needs Improvement: < 500ms
+              - 🔴 Poor: ≥ 500ms
+
+            - **CLS (Cumulative Layout Shift)**: 페이지 로드 중 예기치 않은 레이아웃 변경의 정도
+              - 🟢 Good: < 0.1
+              - 🟠 Needs Improvement: < 0.25
+              - 🔴 Poor: ≥ 0.25
+
+            > 📅 측정 시간: ${new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })}`;
+
+            try {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `📊 웹사이트 성능 측정 결과 - ${new Date().toLocaleString('ko-KR', { 
+                  timeZone: 'Asia/Seoul',
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false
+                })}`,
+                body: body,
+                labels: ['lighthouse-audit', 'web-vitals']
+              });
+              console.log('Issue created successfully');
+            } catch (error) {
+              console.log(`Failed to create issue: ${error.message}`);
+              // 레이블이 없으면 레이블 없이 재시도
+              if (error.status === 422) {
+                try {
+                  await github.rest.issues.create({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    title: `📊 웹사이트 성능 측정 결과 - ${new Date().toLocaleString('ko-KR', { 
+                      timeZone: 'Asia/Seoul',
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: false
+                    })}`,
+                    body: body
+                  });
+                  console.log('Issue created without labels');
+                } catch (retryError) {
+                  console.log(`Failed to create issue without labels: ${retryError.message}`);
+                }
+              }
+            }
