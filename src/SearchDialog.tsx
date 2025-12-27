@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -82,20 +82,62 @@ const TIME_SLOTS = [
 
 const PAGE_SIZE = 100;
 
-const fetchMajors = () => axios.get<Lecture[]>('/schedules-majors.json');
-const fetchLiberalArts = () => axios.get<Lecture[]>('/schedules-liberal-arts.json');
+// 캐싱 함수 (클로저 활용)
+const createCachedFetch = <T,>(fetchFn: () => Promise<T>) => {
+  let cache: T | null = null;
+  let pending: Promise<T> | null = null;
 
-// TODO: 이 코드를 개선해서 API 호출을 최소화 해보세요 + Promise.all이 현재 잘못 사용되고 있습니다. 같이 개선해주세요.
-const fetchAllLectures = async () => await Promise.all([
-  (console.log('API Call 1', performance.now()), await fetchMajors()),
-  (console.log('API Call 2', performance.now()), await fetchLiberalArts()),
-  (console.log('API Call 3', performance.now()), await fetchMajors()),
-  (console.log('API Call 4', performance.now()), await fetchLiberalArts()),
-  (console.log('API Call 5', performance.now()), await fetchMajors()),
-  (console.log('API Call 6', performance.now()), await fetchLiberalArts()),
-]);
+  return async (): Promise<T> => {
+    if (cache) return cache;
+    if (pending) return pending;
 
-// TODO: 이 컴포넌트에서 불필요한 연산이 발생하지 않도록 다양한 방식으로 시도해주세요.
+    pending = fetchFn();
+    cache = await pending;
+    pending = null;
+    return cache;
+  };
+};
+
+const fetchMajors = createCachedFetch(() =>
+  axios.get<Lecture[]>('/schedules-majors.json').then(res => res.data)
+);
+const fetchLiberalArts = createCachedFetch(() =>
+  axios.get<Lecture[]>('/schedules-liberal-arts.json').then(res => res.data)
+);
+
+// Promise.all 병렬 처리 + 중복 호출 제거 + 캐싱
+const fetchAllLectures = async () => {
+  console.log('API Call 1 (majors)', performance.now());
+  console.log('API Call 2 (liberalArts)', performance.now());
+
+  const results = await Promise.all([
+    fetchMajors(),
+    fetchLiberalArts(),
+  ]);
+
+  return results;
+};
+
+// 강의 테이블 행 컴포넌트 (memo로 리렌더링 방지)
+interface LectureRowProps {
+  lecture: Lecture;
+  onAdd: (lecture: Lecture) => void;
+}
+
+const LectureRow = memo(({ lecture, onAdd }: LectureRowProps) => (
+  <Tr>
+    <Td width="100px">{lecture.id}</Td>
+    <Td width="50px">{lecture.grade}</Td>
+    <Td width="200px">{lecture.title}</Td>
+    <Td width="50px">{lecture.credits}</Td>
+    <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.major }}/>
+    <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.schedule }}/>
+    <Td width="80px">
+      <Button size="sm" colorScheme="green" onClick={() => onAdd(lecture)}>추가</Button>
+    </Td>
+  </Tr>
+));
+
 const SearchDialog = ({ searchInfo, onClose }: Props) => {
   const { setSchedulesMap } = useScheduleContext();
 
@@ -111,7 +153,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     majors: [],
   });
 
-  const getFilteredLectures = () => {
+  const filteredLectures = useMemo(() => {
     const { query = '', credits, grades, days, times, majors } = searchOptions;
     return lectures
       .filter(lecture =>
@@ -135,20 +177,19 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
         const schedules = lecture.schedule ? parseSchedule(lecture.schedule) : [];
         return schedules.some(s => s.range.some(time => times.includes(time)));
       });
-  }
+  }, [lectures, searchOptions]);
 
-  const filteredLectures = getFilteredLectures();
-  const lastPage = Math.ceil(filteredLectures.length / PAGE_SIZE);
-  const visibleLectures = filteredLectures.slice(0, page * PAGE_SIZE);
-  const allMajors = [...new Set(lectures.map(lecture => lecture.major))];
+  const lastPage = useMemo(() => Math.ceil(filteredLectures.length / PAGE_SIZE), [filteredLectures.length]);
+  const visibleLectures = useMemo(() => filteredLectures.slice(0, page * PAGE_SIZE), [filteredLectures, page]);
+  const allMajors = useMemo(() => [...new Set(lectures.map(lecture => lecture.major))], [lectures]);
 
-  const changeSearchOption = (field: keyof SearchOption, value: SearchOption[typeof field]) => {
+  const changeSearchOption = useCallback((field: keyof SearchOption, value: SearchOption[typeof field]) => {
     setPage(1);
-    setSearchOptions(({ ...searchOptions, [field]: value }));
+    setSearchOptions(prev => ({ ...prev, [field]: value }));
     loaderWrapperRef.current?.scrollTo(0, 0);
-  };
+  }, []);
 
-  const addSchedule = (lecture: Lecture) => {
+  const addSchedule = useCallback((lecture: Lecture) => {
     if (!searchInfo) return;
 
     const { tableId } = searchInfo;
@@ -164,7 +205,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
     }));
 
     onClose();
-  };
+  }, [searchInfo, setSchedulesMap, onClose]);
 
   useEffect(() => {
     const start = performance.now();
@@ -173,7 +214,7 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
       const end = performance.now();
       console.log('모든 API 호출 완료 ', end)
       console.log('API 호출에 걸린 시간(ms): ', end - start)
-      setLectures(results.flatMap(result => result.data));
+      setLectures(results.flat());
     })
   }, []);
 
@@ -351,17 +392,11 @@ const SearchDialog = ({ searchInfo, onClose }: Props) => {
                 <Table size="sm" variant="striped">
                   <Tbody>
                     {visibleLectures.map((lecture, index) => (
-                      <Tr key={`${lecture.id}-${index}`}>
-                        <Td width="100px">{lecture.id}</Td>
-                        <Td width="50px">{lecture.grade}</Td>
-                        <Td width="200px">{lecture.title}</Td>
-                        <Td width="50px">{lecture.credits}</Td>
-                        <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.major }}/>
-                        <Td width="150px" dangerouslySetInnerHTML={{ __html: lecture.schedule }}/>
-                        <Td width="80px">
-                          <Button size="sm" colorScheme="green" onClick={() => addSchedule(lecture)}>추가</Button>
-                        </Td>
-                      </Tr>
+                      <LectureRow
+                        key={`${lecture.id}-${index}`}
+                        lecture={lecture}
+                        onAdd={addSchedule}
+                      />
                     ))}
                   </Tbody>
                 </Table>
